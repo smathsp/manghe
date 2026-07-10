@@ -82,7 +82,7 @@ const submitData = () => {
   allItems.forEach(item => {
     const selected = [...legendaryItems.value, ...rareItems.value, ...commonItems.value]
       .some(s => s.id === item.id)
-    bitableFields[item.name] = selected ? 1 : ''
+    bitableFields[item.name] = selected ? 1 : null
   })
 
   fetch('https://manghe-api.smathsp.com', {
@@ -129,11 +129,8 @@ const submitData = () => {
       showSuccess.value = true
       nickname.value = ''
       message.value = ''
-      // 后台读取表格写入结果
-      res.json().then(data => {
-        console.log('提交结果:', data)
-        if (data.bitable) console.log('表格写入:', data.bitable)
-      })
+      // 静默读取响应体（防止 Response 流未消费）
+      res.json()
     } else if (res.status === 429) {
       res.json().then(data => {
         submitTip.value = `⏳ ${data.msg}`

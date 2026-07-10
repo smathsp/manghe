@@ -133,7 +133,6 @@ export default {
     return new Response(JSON.stringify({
       code: feishuResult.code === 0 ? 0 : feishuResult.code,
       msg: feishuResult.code === 0 ? '提交成功' : '提交失败',
-      bitable: bitableResult,
     }), {
       headers: {
         'Content-Type': 'application/json',
