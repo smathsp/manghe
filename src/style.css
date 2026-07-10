@@ -128,7 +128,7 @@ body {
 .tier-row {
   display: flex; align-items: stretch;
   border-radius: 14px; overflow: visible;
-  min-height: 96px;
+  min-height: 108px;
   transition: box-shadow 0.4s ease;
 }
 
@@ -185,10 +185,11 @@ body {
 
 /* Tier Label */
 .tier-label {
-  width: 80px; min-width: 80px;
+  width: 90px; min-width: 90px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 700; color: #fff;
+  font-size: 22px; font-weight: 700; color: #000;
   position: relative; overflow: hidden;
+  border-radius: 14px 0 0 14px;
 }
 .tier-label.gold  {
   background: linear-gradient(180deg, var(--gold-light), var(--gold));
@@ -215,13 +216,13 @@ body {
 }
 
 .tier-label .tier-count {
-  font-size: 10px; font-weight: 400; opacity: 0.75; margin-top: 2px;
+  font-size: 12px; font-weight: 400; opacity: 0.75; margin-top: 2px;
 }
 
 /* Tier Content */
 .tier-content {
   flex: 1; display: flex; flex-wrap: wrap; align-items: center;
-  gap: 8px; padding: 14px 18px; min-height: 96px;
+  gap: 12px; padding: 16px 20px; min-height: 108px;
   transition: background 0.3s;
   overflow: visible;
 }
@@ -238,9 +239,9 @@ body {
 .tier-item-wrap:active { cursor: grabbing; }
 
 .tier-item {
-  width: 80px; height: 80px; border-radius: 14px;
+  width: 88px; height: 88px; border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 38px; position: relative;
+  font-size: 42px; position: relative;
   transition: box-shadow 0.25s;
 }
 
@@ -321,7 +322,7 @@ body {
 }
 
 .tier-item img {
-  width: 60px; height: 60px; object-fit: contain; border-radius: 8px;
+  width: 66px; height: 66px; object-fit: contain; border-radius: 8px;
 }
 
 .tier-item-text {
@@ -389,8 +390,8 @@ body {
 .pool-item .p-icon { font-size: 38px; line-height: 1; }
 .pool-item .p-name {
   font-size: 11px;
-  text-align: center; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; width: 100%;
+  text-align: center; width: 100%;
+  word-break: break-all;
 }
 .pool-item img {
   width: 56px; height: 56px; object-fit: contain;
@@ -530,6 +531,45 @@ body {
 }
 .submit-tip {
   margin-top: 10px; font-size: 13px; color: var(--gold);
+}
+
+/* ===== Success Modal ===== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.25s ease;
+}
+.modal-content {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: 16px; padding: 40px; text-align: center;
+  max-width: 440px; width: 90%; position: relative;
+  box-shadow: 0 0 40px rgba(212, 168, 67, 0.1);
+  display: flex; flex-direction: column; align-items: center;
+}
+.modal-close {
+  position: absolute; top: 12px; right: 16px;
+  background: none; border: none; color: var(--text-tertiary);
+  font-size: 24px; cursor: pointer; line-height: 1;
+}
+.modal-close:hover { color: var(--text-primary); }
+.modal-title {
+  font-size: 20px; font-weight: 700; margin-bottom: 8px;
+  background: linear-gradient(135deg, #f5d98a, var(--gold));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.modal-desc {
+  font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;
+}
+.modal-qrcode {
+  width: 240px; height: 240px; object-fit: contain;
+  border-radius: 12px; border: 1px solid var(--border-subtle);
+  display: block; margin: 0 auto;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @media (max-width: 768px) {

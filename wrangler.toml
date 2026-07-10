@@ -1,0 +1,7 @@
+name = "manghe-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+kv_namespaces = [
+  { binding = "RATE_LIMIT", id = "6af0703faa654a159c5293c023527269" }
+]

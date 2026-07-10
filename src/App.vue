@@ -37,27 +37,108 @@ const prices = [199, 299, 399, 499, 599]
 const nickname = ref('')
 const message = ref('')
 const submitTip = ref('')
+const submitting = ref(false)
+const showSuccess = ref(false)
 
 const submitData = () => {
+  if (submitting.value) return
+  submitting.value = true
   const data = {
     ranking: {
-      legendary: legendaryItems.value.map(i => i.name),
-      rare: rareItems.value.map(i => i.name),
-      common: commonItems.value.map(i => i.name),
+      legendary: Object.fromEntries(
+        ITEMS.filter(i => i.rarity === 'legendary').map(i => [
+          i.name,
+          legendaryItems.value.some(s => s.id === i.id) ? 1 : ''
+        ])
+      ),
+      rare: Object.fromEntries(
+        ITEMS.filter(i => i.rarity === 'rare').map(i => [
+          i.name,
+          rareItems.value.some(s => s.id === i.id) ? 1 : ''
+        ])
+      ),
+      common: Object.fromEntries(
+        ITEMS.filter(i => i.rarity === 'common').map(i => [
+          i.name,
+          commonItems.value.some(s => s.id === i.id) ? 1 : ''
+        ])
+      ),
     },
     price: selectedPrice.value,
     nickname: nickname.value,
     message: message.value,
     timestamp: new Date().toISOString(),
   }
-  const json = JSON.stringify(data, null, 2)
-  navigator.clipboard.writeText(json).then(() => {
-    submitTip.value = '已复制到剪切板，正在打开表单...'
-    setTimeout(() => {
-      window.open('https://my.feishu.cn/share/base/form/shrcnpkbkXiuyYdTk5oueTmWzkh', '_blank')
-    }, 500)
+  submitTip.value = '提交中...'
+
+  // 构建多维表格字段
+  const allItems = ITEMS
+  const bitableFields = {
+    '昵称': nickname.value || '',
+    '留言': message.value || '',
+    '盲盒价值': selectedPrice.value,
+    '提交时间': Date.now(),
+  }
+  allItems.forEach(item => {
+    const selected = [...legendaryItems.value, ...rareItems.value, ...commonItems.value]
+      .some(s => s.id === item.id)
+    bitableFields[item.name] = selected ? 1 : ''
+  })
+
+  fetch('https://manghe-api.smathsp.com', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      msg_type: 'interactive',
+      _bitableFields: bitableFields,
+      card: {
+        header: {
+          title: { tag: 'plain_text', content: '🎉 十周年盲盒你来选 - 新提交' },
+          template: 'gold',
+        },
+        elements: [
+          {
+            tag: 'div',
+            text: {
+              tag: 'lark_md',
+              content: [
+                `**昵称：** ${nickname.value || '未填写'}`,
+                `**留言：** ${message.value || '未填写'}`,
+                `**盲盒价值：** ¥${selectedPrice.value}`,
+                '',
+                `**传说排行（${legendaryItems.value.length}/5）：** ${legendaryItems.value.map(i => i.name).join('、') || '无'}`,
+                `**稀有排行（${rareItems.value.length}/5）：** ${rareItems.value.map(i => i.name).join('、') || '无'}`,
+                `**普通排行（${commonItems.value.length}/10）：** ${commonItems.value.map(i => i.name).join('、') || '无'}`,
+              ].join('\n'),
+            },
+          },
+          {
+            tag: 'div',
+            text: {
+              tag: 'lark_md',
+              content: `⏰ ${new Date().toLocaleString('zh-CN')}`,
+            },
+          },
+        ],
+      },
+    }),
+  }).then(res => {
+    submitting.value = false
+    if (res.status === 200) {
+      submitTip.value = ''
+      showSuccess.value = true
+      nickname.value = ''
+      message.value = ''
+    } else if (res.status === 429) {
+      res.json().then(data => {
+        submitTip.value = `⏳ ${data.msg}`
+      })
+    } else {
+      submitTip.value = '❌ 提交失败，请重试'
+    }
   }).catch(() => {
-    submitTip.value = '复制失败，请手动复制'
+    submitting.value = false
+    submitTip.value = '❌ 网络错误，请重试'
   })
 }
 </script>
@@ -71,10 +152,10 @@ const submitData = () => {
       <div class="container relative z-10">
         <p class="hero-sub anim-fade-in">鲲鹏十周年</p>
         <h1 class="anim-fade-in">十周年盲盒你来选</h1>
-        <p class="hero-desc anim-fade-in">将设备拖拽到对应稀有度等级</p>
+        <p class="hero-desc anim-fade-in" style="font-size: 18px; background: linear-gradient(135deg, #f5d98a 0%, var(--gold) 40%, #c49a38 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">将设备拖拽到对应稀有度等级</p>
         <div class="flex justify-center anim-fade-in">
           <span style="font-size: 13px; color: var(--text-secondary);">
-            已分配 <span style="color: var(--gold); font-family: monospace;">{{ totalAssigned }}</span> / 24
+            已分配 <span style="color: var(--gold); font-family: monospace;">{{ totalAssigned }}</span> / 20
           </span>
         </div>
       </div>
@@ -86,7 +167,7 @@ const submitData = () => {
         <div class="tier-list">
           <TierRow
             label="传说" color="gold" rarity="legendary"
-            :max="6" :items="legendaryItems" :pool-items="legendaryPool" @update="triggerUpdate"
+            :max="5" :items="legendaryItems" :pool-items="legendaryPool" @update="triggerUpdate"
           />
         </div>
         <PoolSection
@@ -102,7 +183,7 @@ const submitData = () => {
         <div class="tier-list">
           <TierRow
             label="稀有" color="red" rarity="rare"
-            :max="6" :items="rareItems" :pool-items="rarePool" @update="triggerUpdate"
+            :max="5" :items="rareItems" :pool-items="rarePool" @update="triggerUpdate"
           />
         </div>
         <PoolSection
@@ -118,7 +199,7 @@ const submitData = () => {
         <div class="tier-list">
           <TierRow
             label="普通" color="purple" rarity="common"
-            :max="12" :items="commonItems" :pool-items="commonPool" @update="triggerUpdate"
+            :max="10" :items="commonItems" :pool-items="commonPool" @update="triggerUpdate"
           />
         </div>
         <PoolSection
@@ -159,7 +240,7 @@ const submitData = () => {
           <svg class="w-5 h-5" style="color: var(--gold);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"></path>
           </svg>
-          <h2 style="font-size: 20px; font-weight: 700;">留言给鲲鹏</h2>
+          <h2 style="font-size: 20px; font-weight: 700;">留言给张导</h2>
         </div>
         <div class="message-row">
           <div class="message-field">
@@ -172,11 +253,11 @@ const submitData = () => {
             />
           </div>
           <div class="message-field" style="flex: 2;">
-            <label class="field-label">你想对鲲鹏说的话</label>
+            <label class="field-label">你想对张导说的话</label>
             <input
               v-model="message"
               type="text"
-              placeholder="说点什么吧..."
+              placeholder="想对张导说点什么..."
               class="field-input"
             />
           </div>
@@ -187,20 +268,31 @@ const submitData = () => {
     <!-- Submit Button -->
     <section class="section-block">
       <div class="container" style="text-align: center;">
-        <button class="btn-submit" @click="submitData">
+        <button class="btn-submit" @click="submitData" :disabled="submitting" :style="{ opacity: submitting ? 0.6 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
           </svg>
-          提交排行数据
+          提交你的心动选择
         </button>
         <p v-if="submitTip" class="submit-tip">{{ submitTip }}</p>
       </div>
     </section>
 
+    <!-- Success Modal -->
+    <div v-if="showSuccess" class="modal-overlay" @click.self="showSuccess = false">
+      <div class="modal-content">
+        <button class="modal-close" @click="showSuccess = false">&times;</button>
+        <h3 class="modal-title">感谢你的心动选择</h3>
+        <p class="modal-desc">扫码加入粉丝群，一起聊聊吧</p>
+        <img src="/images/qrcode.jpg" alt="粉丝群二维码" class="modal-qrcode" />
+        <button class="btn btn-primary" style="margin-top: 16px;" @click="showSuccess = false">我知道了</button>
+      </div>
+    </div>
+
     <footer class="footer">
       <div class="container">
-        <p>鲲鹏十周年 · 十周年盲盒你来选 · Hangtola</p>
+        <p>鲲鹏十周年 · 十周年盲盒你来选</p>
       </div>
     </footer>
   </div>
