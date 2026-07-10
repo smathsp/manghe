@@ -124,6 +124,7 @@ const submitData = () => {
     }),
   }).then(res => {
     submitting.value = false
+    console.log('提交结果:', res)
     if (res.status === 200) {
       submitTip.value = ''
       showSuccess.value = true

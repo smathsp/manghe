@@ -107,7 +107,7 @@ export default {
     }
 
     // 并行执行：转发卡片 + 写入表格
-    const [feishuResult] = await Promise.all([
+    const [feishuResult, bitableResult] = await Promise.all([
       fetch(env.FEISHU_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,9 +116,9 @@ export default {
       (async () => {
         try {
           const token = await getTenantToken(env)
-          if (token && parsed._bitableFields) {
-            return await writeToBitable(token, parsed._bitableFields)
-          }
+          if (!token) return { code: -1, msg: '获取token失败' }
+          if (!parsed._bitableFields) return { code: -1, msg: '无表格数据' }
+          return await writeToBitable(token, parsed._bitableFields)
         } catch (e) { return { code: -1, msg: e.message } }
       })(),
     ])
@@ -133,6 +133,7 @@ export default {
     return new Response(JSON.stringify({
       code: feishuResult.code === 0 ? 0 : feishuResult.code,
       msg: feishuResult.code === 0 ? '提交成功' : '提交失败',
+      bitable: bitableResult,
     }), {
       headers: {
         'Content-Type': 'application/json',
