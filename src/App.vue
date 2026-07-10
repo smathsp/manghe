@@ -124,12 +124,16 @@ const submitData = () => {
     }),
   }).then(res => {
     submitting.value = false
-    console.log('提交结果:', res)
     if (res.status === 200) {
       submitTip.value = ''
       showSuccess.value = true
       nickname.value = ''
       message.value = ''
+      // 后台读取表格写入结果
+      res.json().then(data => {
+        console.log('提交结果:', data)
+        if (data.bitable) console.log('表格写入:', data.bitable)
+      })
     } else if (res.status === 429) {
       res.json().then(data => {
         submitTip.value = `⏳ ${data.msg}`
