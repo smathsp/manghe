@@ -6,49 +6,54 @@
     "service": {
       "component": "scf",
       "name": "manghe-api",
-      "app": "manghe",
       "inputs": {
         "name": "manghe-api",
         "region": "ap-guangzhou",
         "runtime": "Nodejs16.13",
         "handler": "index.main_handler",
-        "src": {
-          "src": "./scf"
+        "src": "./scf",
+        "variables": {
+          "FEISHU_APP_SECRET": "<REDACTED>"
         },
         "events": [
           {
-            "apigw": {
+            "http": {
               "parameters": {
-                "endpoints": [
-                  {
-                    "path": "/",
-                    "method": "POST"
-                  }
-                ],
-                "protocols": [
-                  "https"
-                ],
-                "environment": "release"
+                "netConfig": {
+                  "enableIntranet": true,
+                  "enableExtranet": true
+                },
+                "qualifier": "$DEFAULT",
+                "authType": "NONE"
               }
             }
           }
         ]
       }
     },
+    "dashboard": {
+      "isEnabledForService": false,
+      "requiredAuthentication": false,
+      "orgFeaturesInUse": null,
+      "orgObservabilityIntegrations": null,
+      "serviceAppId": null,
+      "serviceProvider": null,
+      "instanceParameters": null
+    },
     "error": {
-      "message": "You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".",
-      "stack": "Error: You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".\n    at Authentication.getAuthenticatedData (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1613:3023)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Authentication.authenticate (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1616:4133)\n    at async TraditionalRunner.resolveVariablesAndAuthenticate (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1624:2394)\n    at async TraditionalRunner.run (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:2543:26368)\n    at async route (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:3245:3903)\n    at async Object.run (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:3246:3955)\n    at async run2 (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:3246:5119)"
+      "message": "Cannot resolve '${env:FANGFEISHU_APP_SECRET}' variable at 'inputs.variables.FEISHU_APP_SECRET'. No value is available for this variable, and no default value was provided. Please check your variable definitions or provide a default value.",
+      "stack": "Error: Cannot resolve '${env:FANGFEISHU_APP_SECRET}' variable at 'inputs.variables.FEISHU_APP_SECRET'. No value is available for this variable, and no default value was provided. Please check your variable definitions or provide a default value.\n    at _ResolverManager.resolve (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1619:33962)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async #handlePlaceholderNode (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1619:32149)\n    at async file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1619:29940\n    at async processNodeAndHandleCompletion (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1619:18247)",
+      "code": "MISSING_VARIABLE_RESULT"
     },
-    "serviceRawFile": "component: scf\nname: manghe-api\napp: manghe\n\ninputs:\n  name: manghe-api\n  region: ap-guangzhou\n  runtime: Nodejs16.13\n  handler: index.main_handler\n  src:\n    src: ./scf\n  # 环境变量在腾讯云控制台设置：\n  #   FEISHU_WEBHOOK\n  #   FEISHU_APP_SECRET\n  events:\n    - apigw:\n        parameters:\n          endpoints:\n            - path: /\n              method: POST\n          protocols:\n            - https\n          environment: release\n",
+    "serviceRawFile": "component: scf\nname: manghe-api\n\ninputs:\n  name: manghe-api\n  region: ap-guangzhou\n  runtime: Nodejs16.13\n  handler: index.main_handler\n  src: ./scf\n  variables:\n    FEISHU_APP_SECRET: ${env:FANGFEISHU_APP_SECRET}\n  events:\n    - http:\n        parameters:\n          netConfig:\n            enableIntranet: true\n            enableExtranet: true\n          qualifier: $DEFAULT\n          authType: NONE\n",
     "command": [
-      "config",
-      "credentials"
+      "deploy"
     ],
-    "options": {
-      "tencent": true,
-      "secretId": "<REDACTED>",
-      "secretKey": "<REDACTED>"
-    },
+    "options": {},
+    "orgId": "0a924d1a-6cce-4b30-92e8-e581b23a4fb5",
+    "orgName": "smathsp",
+    "userId": "W47GzRmlSpGKnTJHDF",
+    "userName": "smathsp",
     "serviceProviderAwsCfStackId": null,
     "serviceProviderAwsCfStackCreated": null,
     "serviceProviderAwsCfStackUpdated": null,

@@ -1,23 +1,19 @@
-component: scf
-name: manghe-api
-app: manghe
+service: manghe-api
 
-inputs:
-  name: manghe-api
-  region: ap-guangzhou
+provider:
+  name: tencent
   runtime: Nodejs16.13
-  handler: index.main_handler
-  src:
+  region: ap-guangzhou
+
+functions:
+  manghe-api:
+    handler: index.main_handler
     src: ./scf
-  # 环境变量在腾讯云控制台设置：
-  #   FEISHU_WEBHOOK
-  #   FEISHU_APP_SECRET
-  events:
-    - apigw:
-        parameters:
-          endpoints:
-            - path: /
-              method: POST
-          protocols:
-            - https
-          environment: release
+    events:
+      - http:
+          parameters:
+            netConfig:
+              enableIntranet: true
+              enableExtranet: true
+            qualifier: $DEFAULT
+            authType: NONE
