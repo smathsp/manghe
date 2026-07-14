@@ -1,0 +1,58 @@
+{
+  "/Users/smathsp/code/manghe/serverless.yml": {
+    "versionFramework": "4.39.0",
+    "servicePath": "/Users/smathsp/code/manghe/serverless.yml",
+    "serviceConfigFileName": "serverless.yml",
+    "service": {
+      "component": "scf",
+      "name": "manghe-api",
+      "app": "manghe",
+      "inputs": {
+        "name": "manghe-api",
+        "region": "ap-guangzhou",
+        "runtime": "Nodejs16.13",
+        "handler": "index.main_handler",
+        "src": {
+          "src": "./scf"
+        },
+        "events": [
+          {
+            "apigw": {
+              "parameters": {
+                "endpoints": [
+                  {
+                    "path": "/",
+                    "method": "POST"
+                  }
+                ],
+                "protocols": [
+                  "https"
+                ],
+                "environment": "release"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "error": {
+      "message": "You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".",
+      "stack": "Error: You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".\n    at Authentication.getAuthenticatedData (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1613:3023)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Authentication.authenticate (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1616:4133)\n    at async TraditionalRunner.resolveVariablesAndAuthenticate (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:1624:2394)\n    at async TraditionalRunner.run (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:2543:26368)\n    at async route (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:3245:3903)\n    at async Object.run (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:3246:3955)\n    at async run2 (file:///Users/smathsp/.serverless/releases/4.39.0/package/dist/sf-core.js:3246:5119)"
+    },
+    "serviceRawFile": "component: scf\nname: manghe-api\napp: manghe\n\ninputs:\n  name: manghe-api\n  region: ap-guangzhou\n  runtime: Nodejs16.13\n  handler: index.main_handler\n  src:\n    src: ./scf\n  # 环境变量在腾讯云控制台设置：\n  #   FEISHU_WEBHOOK\n  #   FEISHU_APP_SECRET\n  events:\n    - apigw:\n        parameters:\n          endpoints:\n            - path: /\n              method: POST\n          protocols:\n            - https\n          environment: release\n",
+    "command": [
+      "config",
+      "credentials"
+    ],
+    "options": {
+      "tencent": true,
+      "secretId": "<REDACTED>",
+      "secretKey": "<REDACTED>"
+    },
+    "serviceProviderAwsCfStackId": null,
+    "serviceProviderAwsCfStackCreated": null,
+    "serviceProviderAwsCfStackUpdated": null,
+    "serviceProviderAwsCfStackStatus": null,
+    "serviceProviderAwsCfStackOutputs": null
+  }
+}

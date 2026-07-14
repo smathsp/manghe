@@ -85,7 +85,7 @@ const submitData = () => {
     bitableFields[item.name] = selected ? 1 : null
   })
 
-  fetch('https://manghe-api.smathsp.com', {
+  fetch('https://1324609987-1rcresvm5v.ap-guangzhou.tencentscf.com', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
