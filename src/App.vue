@@ -39,6 +39,8 @@ const message = ref('')
 const submitTip = ref('')
 const submitting = ref(false)
 const showSuccess = ref(false)
+const cooldown = ref(0)
+let cooldownTimer = null
 
 const submitData = () => {
   if (submitting.value) return
@@ -129,7 +131,15 @@ const submitData = () => {
       showSuccess.value = true
       nickname.value = ''
       message.value = ''
-      // 静默读取响应体（防止 Response 流未消费）
+      // 前端 5 分钟冷却
+      cooldown.value = 300
+      cooldownTimer = setInterval(() => {
+        cooldown.value--
+        if (cooldown.value <= 0) {
+          clearInterval(cooldownTimer)
+          cooldownTimer = null
+        }
+      }, 1000)
       res.json()
     } else if (res.status === 429) {
       res.json().then(data => {
@@ -270,12 +280,12 @@ const submitData = () => {
     <!-- Submit Button -->
     <section class="section-block">
       <div class="container" style="text-align: center;">
-        <button class="btn-submit" @click="submitData" :disabled="submitting" :style="{ opacity: submitting ? 0.6 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }">
+        <button class="btn-submit" @click="submitData" :disabled="submitting || cooldown > 0" :style="{ opacity: (submitting || cooldown > 0) ? 0.6 : 1, cursor: (submitting || cooldown > 0) ? 'not-allowed' : 'pointer' }">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
           </svg>
-          提交你的心动选择
+          {{ cooldown > 0 ? `请等待 ${cooldown} 秒` : '提交你的心动选择' }}
         </button>
         <p v-if="submitTip" class="submit-tip">{{ submitTip }}</p>
       </div>

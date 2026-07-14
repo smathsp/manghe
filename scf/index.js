@@ -5,11 +5,7 @@ const http = require('http');
 const FEISHU_APP_ID = 'cli_aada2fcf43f81bdd';
 const BITABLE_APP_TOKEN = 'FpVaw2AkAitTwjkXVFaclw2wnMd';
 const BITABLE_TABLE_ID = 'tblSIYJ2tkemtXeE';
-const RATE_LIMIT_SECONDS = 300;
 const MAX_BODY_SIZE = 4096;
-
-// 简单的内存频率限制（重启后清空）
-const rateLimitMap = new Map();
 
 function fetchJSON(url, options) {
   return new Promise((resolve, reject) => {
@@ -52,8 +48,18 @@ async function writeToBitable(token, fields) {
   );
 }
 
+function parseEvent(event) {
+  if (typeof event === 'string') {
+    return { method: 'POST', body: event };
+  }
+  if (event.body && !event.requestMethod) {
+    return { method: 'POST', body: event.body };
+  }
+  return { method: event.requestMethod, body: event.body || '' };
+}
+
 exports.main_handler = async (event, context) => {
-  const { requestMethod, headers, body, queryString } = event;
+  const { method, body } = parseEvent(event);
 
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -61,33 +67,14 @@ exports.main_handler = async (event, context) => {
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  // CORS 预检
-  if (requestMethod === 'OPTIONS') {
+  if (method === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
 
-  if (requestMethod !== 'POST') {
+  if (method !== 'POST') {
     return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ msg: 'Method not allowed' }) };
   }
 
-  // 获取客户端 IP
-  const ip = (headers && (headers['x-forwarded-for'] || headers['client-ip'])) || 'unknown';
-
-  // 频率限制
-  const lastSubmit = rateLimitMap.get(ip);
-  if (lastSubmit) {
-    const elapsed = (Date.now() - lastSubmit) / 1000;
-    if (elapsed < RATE_LIMIT_SECONDS) {
-      const waitSeconds = Math.ceil(RATE_LIMIT_SECONDS - elapsed);
-      return {
-        statusCode: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 429, msg: `提交太频繁，请${waitSeconds}秒后再试` }),
-      };
-    }
-  }
-
-  // 读取请求体
   const rawBody = body || '';
   if (rawBody.length > MAX_BODY_SIZE) {
     return {
@@ -115,46 +102,33 @@ exports.main_handler = async (event, context) => {
     };
   }
 
-  const webhookUrl = process.env.FEISHU_WEBHOOK;
   const appSecret = process.env.FEISHU_APP_SECRET;
 
-  // 并行执行：转发卡片 + 写入表格
-  const results = await Promise.all([
-    fetchJSON(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: rawBody,
-    }).catch(e => ({ code: -1, msg: e.message })),
-    (async () => {
-      try {
-        if (!appSecret) return { code: -1, msg: '未配置APP_SECRET' };
-        const token = await getTenantToken(appSecret);
-        if (!token) return { code: -1, msg: '获取token失败' };
-        if (!parsed._bitableFields) return { code: -1, msg: '无表格数据' };
-        return await writeToBitable(token, parsed._bitableFields);
-      } catch (e) { return { code: -1, msg: e.message }; }
-    })(),
-  ]);
-
-  const feishuResult = results[0];
-
-  // 成功后记录频率
-  if (feishuResult.code === 0 || feishuResult.StatusCode === 0) {
-    rateLimitMap.set(ip, Date.now());
-    // 清理过期记录
-    if (rateLimitMap.size > 10000) {
-      for (const [key, val] of rateLimitMap) {
-        if (Date.now() - val > RATE_LIMIT_SECONDS * 1000) rateLimitMap.delete(key);
+  // 写入多维表格
+  let bitableResult = { code: -1, msg: '未执行' };
+  try {
+    if (!appSecret) {
+      bitableResult = { code: -1, msg: '未配置APP_SECRET' };
+    } else {
+      const token = await getTenantToken(appSecret);
+      if (!token) {
+        bitableResult = { code: -1, msg: '获取token失败' };
+      } else if (!parsed._bitableFields) {
+        bitableResult = { code: -1, msg: '无表格数据' };
+      } else {
+        bitableResult = await writeToBitable(token, parsed._bitableFields);
       }
     }
+  } catch (e) {
+    bitableResult = { code: -1, msg: e.message };
   }
 
   return {
     statusCode: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      code: feishuResult.code === 0 ? 0 : feishuResult.code,
-      msg: feishuResult.code === 0 ? '提交成功' : '提交失败',
+      code: bitableResult.code === 0 ? 0 : bitableResult.code,
+      msg: bitableResult.code === 0 ? '提交成功' : '提交失败',
     }),
   };
 };
