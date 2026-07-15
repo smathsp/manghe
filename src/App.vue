@@ -87,7 +87,7 @@ const submitData = () => {
     bitableFields[item.name] = selected ? 1 : null
   })
 
-  fetch('https://1324609987-1rcresvm5v.ap-guangzhou.tencentscf.com', {
+  fetch('https://manghe-proxy.sectriwind.workers.dev', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
