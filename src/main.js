@@ -3,7 +3,11 @@ import './style.css'
 import App from './App.vue'
 import ResultsPage from './ResultsPage.vue'
 
-const RootComponent = window.location.pathname.replace(/\/+$/, '') === '/result'
+const normalizedPath = window.location.pathname.replace(/\/+$/, '')
+const isResultsPage = normalizedPath === '/result'
+  || normalizedPath.endsWith('/result/index.html')
+
+const RootComponent = isResultsPage
   ? ResultsPage
   : App
 
