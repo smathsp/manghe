@@ -60,19 +60,6 @@ const navItems = [
     </section>
 
     <div class="activation-shell activation-layout">
-      <aside class="activation-sidebar">
-        <p>流程目录</p>
-        <nav aria-label="激活流程目录">
-          <a v-for="item in navItems" :key="item.id" :href="`#${item.id}`">
-            <span>{{ item.number }}</span>{{ item.label }}
-          </a>
-        </nav>
-        <div class="sidebar-help">
-          <span>!</span>
-          <p>遇到页面内容与指南不一致时，请暂停操作并联系负责你的工作人员。</p>
-        </div>
-      </aside>
-
       <div class="activation-content">
         <section id="prepare" class="guide-section guide-section-first">
           <header class="guide-section-header">
