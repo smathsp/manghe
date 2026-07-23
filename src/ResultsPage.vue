@@ -1,11 +1,70 @@
 <script setup>
+import { nextTick, ref } from 'vue'
 import { RESULT_GROUPS, TOTAL_BALLOTS } from './data/results'
 
 const numberFormatter = new Intl.NumberFormat('zh-CN')
+const resultsPageRef = ref(null)
+const isExporting = ref(false)
+
+const waitForImages = (container) => Promise.all(
+  Array.from(container.querySelectorAll('img')).map(image => {
+    if (image.complete) return Promise.resolve()
+
+    return new Promise(resolve => {
+      image.addEventListener('load', resolve, { once: true })
+      image.addEventListener('error', resolve, { once: true })
+    })
+  }),
+)
+
+const exportPng = async () => {
+  if (isExporting.value || !resultsPageRef.value) return
+
+  isExporting.value = true
+
+  try {
+    await nextTick()
+    await document.fonts?.ready
+    await waitForImages(resultsPageRef.value)
+
+    const { default: html2canvas } = await import('html2canvas')
+    const width = resultsPageRef.value.scrollWidth
+    const height = resultsPageRef.value.scrollHeight
+    const canvas = await html2canvas(resultsPageRef.value, {
+      scale: 2,
+      width,
+      height,
+      windowWidth: width,
+      windowHeight: height,
+      backgroundColor: '#07070b',
+      useCORS: true,
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+    })
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+    if (!blob) throw new Error('PNG generation failed')
+
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = '十周年盲盒-用户票选结果-2x.png'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+  } catch (error) {
+    console.error('导出 PNG 失败：', error)
+    window.alert('PNG 导出失败，请稍后重试。')
+  } finally {
+    isExporting.value = false
+  }
+}
 </script>
 
 <template>
-  <main class="results-page">
+  <main ref="resultsPageRef" class="results-page">
     <header class="results-nav">
       <div class="results-shell results-nav-inner">
         <a class="results-brand" href="/" aria-label="返回盲盒筛选工具首页">
@@ -15,10 +74,23 @@ const numberFormatter = new Intl.NumberFormat('zh-CN')
             <small>用户票选结果</small>
           </span>
         </a>
-        <a class="back-link" href="/">
-          <span aria-hidden="true">←</span>
-          返回筛选工具
-        </a>
+        <div class="results-nav-actions">
+          <button
+            class="export-png-button"
+            type="button"
+            :disabled="isExporting"
+            data-html2canvas-ignore
+            @click="exportPng"
+          >
+            <span aria-hidden="true">{{ isExporting ? '···' : '⇩' }}</span>
+            {{ isExporting ? '正在生成' : '导出 PNG' }}
+            <small>2×</small>
+          </button>
+          <a class="back-link" href="/">
+            <span aria-hidden="true">←</span>
+            <span class="back-link-label">返回筛选工具</span>
+          </a>
+        </div>
       </div>
     </header>
 

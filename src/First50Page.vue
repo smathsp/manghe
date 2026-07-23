@@ -68,12 +68,54 @@ const roundedRect = (context, x, y, width, height, radius) => {
 }
 
 const fitNameFont = (context, name, maxWidth) => {
-  let size = 18
+  let size = 15
   do {
     context.font = `600 ${size}px "Segoe UI Symbol", "Arial Unicode MS", "Microsoft YaHei", sans-serif`
     if (context.measureText(name).width <= maxWidth) return
     size -= 1
-  } while (size >= 12)
+  } while (size >= 11)
+}
+
+const angledRect = (context, x, y, width, height, cut = 7) => {
+  context.beginPath()
+  context.moveTo(x + cut, y)
+  context.lineTo(x + width - cut, y)
+  context.lineTo(x + width, y + cut)
+  context.lineTo(x + width, y + height - cut)
+  context.lineTo(x + width - cut, y + height)
+  context.lineTo(x + cut, y + height)
+  context.lineTo(x, y + height - cut)
+  context.lineTo(x, y + cut)
+  context.closePath()
+}
+
+const drawFlame = (context, centerX, centerY, size) => {
+  context.save()
+  context.translate(centerX, centerY)
+  const outer = context.createLinearGradient(0, -size / 2, 0, size / 2)
+  outer.addColorStop(0, '#ffcf83')
+  outer.addColorStop(.38, '#ff5c1e')
+  outer.addColorStop(1, '#7d0904')
+  context.fillStyle = outer
+  context.shadowColor = 'rgba(255, 54, 13, .55)'
+  context.shadowBlur = 22
+  context.beginPath()
+  context.moveTo(0, -size * .52)
+  context.bezierCurveTo(size * .12, -size * .22, size * .43, -size * .08, size * .34, size * .22)
+  context.bezierCurveTo(size * .27, size * .48, 0, size * .57, 0, size * .57)
+  context.bezierCurveTo(0, size * .57, -size * .33, size * .46, -size * .35, size * .17)
+  context.bezierCurveTo(-size * .37, -size * .05, -size * .14, -size * .17, -size * .08, -size * .34)
+  context.bezierCurveTo(-size * .03, -size * .12, size * .06, -size * .04, size * .07, size * .14)
+  context.bezierCurveTo(size * .2, -.02 * size, size * .12, -size * .3, 0, -size * .52)
+  context.fill()
+  context.shadowBlur = 0
+  context.fillStyle = '#ffd9a0'
+  context.beginPath()
+  context.moveTo(0, -size * .08)
+  context.bezierCurveTo(size * .18, size * .12, size * .14, size * .35, 0, size * .43)
+  context.bezierCurveTo(-size * .16, size * .34, -size * .15, size * .12, 0, -size * .08)
+  context.fill()
+  context.restore()
 }
 
 const exportPng = async () => {
@@ -83,137 +125,152 @@ const exportPng = async () => {
   try {
     await document.fonts?.ready
     const width = 1080
-    const height = 2440
+    const height = 1600
     const scale = 2
     const canvas = document.createElement('canvas')
     canvas.width = width * scale
     canvas.height = height * scale
     const context = canvas.getContext('2d')
     context.scale(scale, scale)
+    context.textBaseline = 'middle'
 
-    context.fillStyle = '#070405'
+    context.fillStyle = '#050203'
     context.fillRect(0, 0, width, height)
-
-    const heroGlow = context.createRadialGradient(width / 2, 20, 0, width / 2, 20, 620)
-    heroGlow.addColorStop(0, 'rgba(255, 58, 25, .34)')
-    heroGlow.addColorStop(.48, 'rgba(120, 18, 8, .12)')
-    heroGlow.addColorStop(1, 'rgba(7, 4, 5, 0)')
-    context.fillStyle = heroGlow
+    const topGlow = context.createRadialGradient(width / 2, 60, 0, width / 2, 60, 600)
+    topGlow.addColorStop(0, 'rgba(255, 73, 22, .38)')
+    topGlow.addColorStop(.42, 'rgba(124, 16, 6, .16)')
+    topGlow.addColorStop(1, 'rgba(5, 2, 3, 0)')
+    context.fillStyle = topGlow
     context.fillRect(0, 0, width, 650)
 
-    context.strokeStyle = 'rgba(255, 70, 27, .12)'
-    context.lineWidth = 1
-    for (let x = -200; x < width + 200; x += 54) {
+    for (let i = 0; i < 54; i += 1) {
+      const x = (i * 193 + 47) % width
+      const y = (i * 79 + 21) % 315
+      const radius = i % 4 === 0 ? 1.8 : 1
+      context.fillStyle = i % 3 === 0 ? 'rgba(255,160,83,.72)' : 'rgba(255,64,20,.48)'
       context.beginPath()
-      context.moveTo(x, 0)
-      context.lineTo(x + 390, 520)
-      context.stroke()
+      context.arc(x, y, radius, 0, Math.PI * 2)
+      context.fill()
     }
 
+    context.strokeStyle = 'rgba(255, 88, 30, .28)'
+    context.lineWidth = 1
+    context.strokeRect(18.5, 18.5, width - 37, height - 37)
+    context.strokeStyle = 'rgba(255, 132, 68, .7)'
+    context.lineWidth = 2
+    ;[[18, 18, 100, 18], [18, 18, 18, 100], [1062, 18, 980, 18], [1062, 18, 1062, 100], [18, 1582, 100, 1582], [18, 1582, 18, 1500], [1062, 1582, 980, 1582], [1062, 1582, 1062, 1500]].forEach(([x1, y1, x2, y2]) => {
+      context.beginPath(); context.moveTo(x1, y1); context.lineTo(x2, y2); context.stroke()
+    })
+
+    drawFlame(context, width / 2, 57, 72)
     context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.fillStyle = '#e09a71'
-    context.font = '600 13px "Microsoft YaHei", sans-serif'
-    context.fillText('首批入选 · 荣耀公示', width / 2, 80)
+    context.fillStyle = '#d7865f'
+    context.font = '600 11px Arial, sans-serif'
+    context.fillText('TIANHUO · FOUNDING 50', width / 2, 103)
 
-    context.fillStyle = '#fff2e9'
-    context.font = '800 70px "Microsoft YaHei", sans-serif'
-    context.fillText('天火卡首批', width / 2, 166)
-
-    const titleGradient = context.createLinearGradient(0, 210, 0, 310)
-    titleGradient.addColorStop(0, '#fff2e8')
-    titleGradient.addColorStop(.45, '#ffba92')
-    titleGradient.addColorStop(1, '#ff4d20')
+    const titleGradient = context.createLinearGradient(0, 115, 0, 188)
+    titleGradient.addColorStop(0, '#fff8f1')
+    titleGradient.addColorStop(.46, '#ffd1ae')
+    titleGradient.addColorStop(1, '#ff6228')
     context.fillStyle = titleGradient
-    context.shadowColor = 'rgba(255, 48, 12, .28)'
-    context.shadowBlur = 18
-    context.font = '800 82px "Microsoft YaHei", sans-serif'
-    context.fillText('50 人名单', width / 2, 258)
+    context.shadowColor = 'rgba(255, 50, 10, .34)'
+    context.shadowBlur = 19
+    context.font = '900 61px "Microsoft YaHei", sans-serif'
+    context.fillText('天火卡首批 50 人名单', width / 2, 151)
     context.shadowBlur = 0
 
-    context.fillStyle = '#d2aaa0'
-    context.font = '500 17px "Microsoft YaHei", sans-serif'
-    context.fillText('不是名单上的一个数字，而是天火故事的第一批名字。', width / 2, 338)
-
-    context.strokeStyle = 'rgba(255, 76, 30, .35)'
-    context.beginPath()
-    context.moveTo(120, 390)
-    context.lineTo(960, 390)
+    const ribbonX = 316
+    const ribbonY = 201
+    const ribbonW = 448
+    const ribbonH = 46
+    angledRect(context, ribbonX, ribbonY, ribbonW, ribbonH, 15)
+    context.fillStyle = 'rgba(21, 6, 7, .94)'
+    context.fill()
+    context.strokeStyle = 'rgba(255, 109, 47, .65)'
     context.stroke()
+    context.fillStyle = '#ffe4d0'
+    context.font = '700 20px "Microsoft YaHei", sans-serif'
+    context.fillText('首批入选 · 荣耀公示', width / 2, ribbonY + ribbonH / 2)
+
+    context.fillStyle = '#c69789'
+    context.font = '500 15px "Microsoft YaHei", sans-serif'
+    context.fillText('不是名单上的一个数字，而是天火故事的第一批名字。', width / 2, 280)
+
+    const frameX = 30
+    const frameY = 315
+    const frameW = 1020
+    const frameH = 1196
+    context.fillStyle = 'rgba(9, 4, 5, .84)'
+    context.fillRect(frameX, frameY, frameW, frameH)
+    context.strokeStyle = 'rgba(255, 83, 28, .34)'
+    context.lineWidth = 1
+    context.strokeRect(frameX + .5, frameY + .5, frameW - 1, frameH - 1)
+    context.strokeStyle = 'rgba(255, 126, 62, .76)'
+    context.lineWidth = 2
+    context.beginPath(); context.moveTo(frameX, frameY + 72); context.lineTo(frameX, frameY); context.lineTo(frameX + 110, frameY); context.stroke()
+    context.beginPath(); context.moveTo(frameX + frameW - 110, frameY); context.lineTo(frameX + frameW, frameY); context.lineTo(frameX + frameW, frameY + 72); context.stroke()
 
     context.textAlign = 'left'
-    context.fillStyle = '#f7ede7'
-    context.font = '700 22px "Microsoft YaHei", sans-serif'
-    context.fillText('荣耀席位 · FOUNDING 50', 42, 438)
+    context.fillStyle = '#ffe4d1'
+    context.font = '700 20px "Microsoft YaHei", sans-serif'
+    context.fillText('荣耀席位', 48, 348)
+    context.fillStyle = '#aa604d'
+    context.font = '600 10px Arial, sans-serif'
+    context.fillText('FOUNDING 50', 145, 348)
     context.textAlign = 'right'
-    context.fillStyle = '#a16c61'
-    context.font = '500 13px "Microsoft YaHei", sans-serif'
-    context.fillText('左列 01—25 · 右列 26—50', width - 42, 438)
+    context.fillStyle = '#96635a'
+    context.font = '500 11px "Microsoft YaHei", sans-serif'
+    context.fillText('左列 01—25 · 右列 26—50', 1032, 348)
 
-    const columnGap = 16
-    const marginX = 42
+    context.strokeStyle = 'rgba(255, 85, 29, .18)'
+    context.beginPath(); context.moveTo(48, 371); context.lineTo(1032, 371); context.stroke()
+    context.strokeStyle = 'rgba(255, 91, 31, .16)'
+    context.beginPath(); context.moveTo(width / 2, 382); context.lineTo(width / 2, 1480); context.stroke()
+
+    const marginX = 44
+    const columnGap = 14
     const columnWidth = (width - marginX * 2 - columnGap) / 2
-    const rowHeight = 62
-    const rowGap = 7
-    const rowStart = 472
+    const rowHeight = 40
+    const rowGap = 5
+    const rowStart = 388
 
     members.forEach((member, index) => {
       const column = index < 25 ? 0 : 1
       const row = index % 25
       const x = marginX + column * (columnWidth + columnGap)
       const y = rowStart + row * (rowHeight + rowGap)
-
       const rowGradient = context.createLinearGradient(x, y, x + columnWidth, y)
-      rowGradient.addColorStop(0, 'rgba(255, 63, 24, .13)')
-      rowGradient.addColorStop(.35, 'rgba(24, 9, 10, .96)')
-      rowGradient.addColorStop(1, 'rgba(10, 7, 8, .98)')
-      roundedRect(context, x, y, columnWidth, rowHeight, 9)
+      rowGradient.addColorStop(0, 'rgba(116, 21, 9, .54)')
+      rowGradient.addColorStop(.24, 'rgba(29, 8, 8, .96)')
+      rowGradient.addColorStop(1, 'rgba(8, 6, 7, .98)')
+      angledRect(context, x, y, columnWidth, rowHeight, 6)
       context.fillStyle = rowGradient
       context.fill()
-      context.strokeStyle = 'rgba(255, 73, 29, .32)'
+      context.strokeStyle = 'rgba(255, 79, 25, .34)'
       context.lineWidth = 1
       context.stroke()
 
-      context.fillStyle = '#ff4a20'
-      roundedRect(context, x, y, 4, rowHeight, 2)
-      context.fill()
-
+      context.fillStyle = '#ff5521'
+      context.fillRect(x, y + 5, 3, rowHeight - 10)
       context.textAlign = 'center'
-      context.fillStyle = '#ff8250'
-      context.font = 'italic 700 20px Georgia, serif'
-      context.fillText(String(index + 1).padStart(2, '0'), x + 37, y + rowHeight / 2)
-
-      context.strokeStyle = 'rgba(255, 76, 30, .2)'
-      context.beginPath()
-      context.moveTo(x + 70, y + 12)
-      context.lineTo(x + 70, y + rowHeight - 12)
-      context.stroke()
-
+      context.fillStyle = '#ff9a63'
+      context.font = 'italic 700 15px Georgia, serif'
+      context.fillText(String(index + 1).padStart(2, '0'), x + 29, y + rowHeight / 2)
+      context.strokeStyle = 'rgba(255, 82, 26, .2)'
+      context.beginPath(); context.moveTo(x + 55, y + 8); context.lineTo(x + 55, y + rowHeight - 8); context.stroke()
       context.textAlign = 'left'
-      context.fillStyle = '#f5eee8'
-      fitNameFont(context, member, columnWidth - 98)
-      context.fillText(member, x + 86, y + rowHeight / 2, columnWidth - 98)
+      context.fillStyle = '#fff2e9'
+      fitNameFont(context, member, columnWidth - 76)
+      context.fillText(member, x + 68, y + rowHeight / 2, columnWidth - 76)
     })
 
-    const endY = rowStart + 25 * (rowHeight + rowGap) + 28
-    context.strokeStyle = 'rgba(255, 76, 30, .28)'
-    context.beginPath()
-    context.moveTo(310, endY)
-    context.lineTo(450, endY)
-    context.moveTo(630, endY)
-    context.lineTo(770, endY)
-    context.stroke()
     context.textAlign = 'center'
-    context.fillStyle = '#8e5b52'
-    context.font = '500 12px Georgia, serif'
-    context.fillText('FOUNDING 50 · 与天火一起写下第一章', width / 2, endY)
-
-    context.fillStyle = '#ffd0b2'
-    context.font = '600 18px "Microsoft YaHei", sans-serif'
-    context.fillText('感谢你，在故事开始的时候选择相信。', width / 2, height - 88)
-    context.fillStyle = '#80564e'
-    context.font = '500 11px "Microsoft YaHei", sans-serif'
-    context.fillText('天火卡 · 致首批 50 位同行者', width / 2, height - 48)
+    context.fillStyle = '#ffcfac'
+    context.font = '600 17px "Microsoft YaHei", sans-serif'
+    context.fillText('感谢你，在故事开始的时候选择相信。', width / 2, 1542)
+    context.fillStyle = '#88564d'
+    context.font = '500 10px Arial, sans-serif'
+    context.fillText('TIANHUO · WITH THE FOUNDING 50', width / 2, 1570)
 
     const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
     if (!pngBlob) throw new Error('PNG export failed')
