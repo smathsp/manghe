@@ -12,6 +12,15 @@ const LIMITS = {
   common: 10,
 }
 
+const RESULT_ITEM_OVERRIDES = {
+  legendary: {
+    7: {
+      name: 'C5800-688',
+      image: '/images/C5800-688-result.png',
+    },
+  },
+}
+
 export const RESULT_GROUPS = [
   { key: 'legendary', label: '传说', eyebrow: 'LEGENDARY', color: 'gold' },
   { key: 'rare', label: '稀有', eyebrow: 'RARE', color: 'red' },
@@ -19,7 +28,11 @@ export const RESULT_GROUPS = [
 ].map(group => {
   const candidates = ITEMS
     .filter(item => item.rarity === group.key)
-    .map((item, index) => ({ ...item, votes: VOTES[group.key][index] }))
+    .map((item, index) => ({
+      ...item,
+      ...RESULT_ITEM_OVERRIDES[group.key]?.[item.id],
+      votes: VOTES[group.key][index],
+    }))
     .sort((a, b) => b.votes - a.votes)
 
   return {

@@ -958,3 +958,156 @@ body {
   .completion-card > span { width: 44px; height: 44px; }
   .activation-footer .activation-shell { flex-direction: column; gap: 10px; }
 }
+
+/* ===== Tianhuo First 50 ===== */
+.first50-page {
+  --fire-red: #ff3a19;
+  --fire-orange: #ff7a1a;
+  --fire-ivory: #ffe9d8;
+  --fire-line: rgba(255, 70, 28, .24);
+  min-height: 100vh; color: #f7f0e9;
+  background:
+    radial-gradient(circle at 50% -8%, rgba(255,56,20,.22), transparent 30rem),
+    linear-gradient(180deg, #090506 0%, #050506 45%, #090303 100%);
+}
+.first50-shell { width: min(1040px, calc(100% - 48px)); margin: 0 auto; }
+.first50-topbar {
+  position: sticky; top: 0; z-index: 60; border-bottom: 1px solid rgba(255,92,45,.12);
+  background: rgba(7,4,5,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+}
+.first50-topbar-inner { height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.first50-brand { display: flex; align-items: center; gap: 12px; color: #fff3e9; text-decoration: none; }
+.first50-brand-mark {
+  display: grid; place-items: center; width: 41px; height: 41px;
+  border: 1px solid rgba(255,87,35,.55); border-radius: 10px; color: #ffb47d; background: rgba(255,58,25,.08);
+  box-shadow: 0 0 25px rgba(255,44,10,.14), inset 0 0 18px rgba(255,80,30,.08);
+  font-family: Georgia, serif; font-size: 18px;
+}
+.first50-brand > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.first50-brand strong { font-size: 16px; letter-spacing: 2px; }
+.first50-brand small { color: #805f5a; font-size: 9px; letter-spacing: 2px; }
+.first50-back { color: #a47f78; text-decoration: none; font-size: 13px; transition: color .2s; }
+.first50-back:hover { color: #ffb18a; }
+.first50-actions { display: flex; align-items: center; gap: 16px; }
+.first50-export-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid rgba(255,77,30,.32);
+  border-radius: 8px; color: #ffd4bd; background: linear-gradient(135deg, rgba(255,66,24,.18), rgba(255,66,24,.07));
+  font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 0 20px rgba(255,48,15,.08); transition: border-color .2s, background .2s, transform .2s;
+}
+.first50-export-btn:hover { transform: translateY(-1px); border-color: rgba(255,105,58,.65); background: rgba(255,69,26,.2); }
+.first50-export-btn:disabled { opacity: .55; cursor: wait; transform: none; }
+.first50-export-btn span { font-size: 17px; line-height: 1; }
+.first50-export-surface { background: #070405; }
+.first50-hero { position: relative; overflow: hidden; padding: 90px 0 82px; text-align: center; border-bottom: 1px solid rgba(255,79,32,.14); }
+.first50-hero::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .28;
+  background-image:
+    linear-gradient(30deg, transparent 48%, rgba(255,65,24,.08) 49%, transparent 50%),
+    linear-gradient(-30deg, transparent 48%, rgba(255,65,24,.06) 49%, transparent 50%);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(to bottom, black, transparent 92%);
+}
+.first50-hero::after {
+  content: '50'; position: absolute; left: 50%; top: 13px; transform: translateX(-50%);
+  color: transparent; -webkit-text-stroke: 1px rgba(255,67,26,.09);
+  font: italic 800 300px/.8 Georgia, serif; letter-spacing: -20px; pointer-events: none;
+}
+.first50-hero .first50-shell { position: relative; z-index: 1; }
+.first50-emblem { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; }
+.first50-emblem i { width: 52px; height: 1px; background: linear-gradient(90deg, transparent, var(--fire-red)); }
+.first50-emblem i:last-child { background: linear-gradient(90deg, var(--fire-red), transparent); }
+.first50-emblem span { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid rgba(255,78,29,.55); border-radius: 50%; color: #ff9560; background: #130707; font: 600 12px/1 Georgia, serif; }
+.first50-eyebrow { color: #a36e61; font-size: 11px; letter-spacing: 5px; }
+.first50-hero h1 { margin-top: 17px; font-size: clamp(51px, 7vw, 78px); line-height: 1.04; letter-spacing: -3px; }
+.first50-hero h1 em {
+  color: transparent; font-style: normal; font-family: Georgia, 'Noto Serif SC', serif; font-weight: 700;
+  background: linear-gradient(180deg, #fff4eb 5%, #ffd2b2 38%, #ff682e 71%, #9b1708 100%);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 7px 15px rgba(255,45,12,.18));
+}
+.first50-subtitle { margin-top: 20px; color: #a77f77; font-size: 15px; letter-spacing: 3px; }
+.first50-stats {
+  display: inline-flex; align-items: center; gap: 26px; margin-top: 36px; padding: 14px 23px;
+  border: 1px solid rgba(255,76,30,.18); border-radius: 12px; background: rgba(15,6,7,.7);
+}
+.first50-stats span { display: flex; align-items: baseline; gap: 8px; color: #906f69; font-size: 11px; }
+.first50-stats strong { color: #ffb58b; font: 600 19px/1 Georgia, serif; }
+.first50-stats > i { width: 1px; height: 24px; background: rgba(255,92,47,.18); }
+.first50-list-section { position: relative; padding: 72px 0 100px; }
+.first50-list-section::before, .first50-list-section::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 1px; pointer-events: none;
+  background: linear-gradient(transparent, rgba(255,65,24,.18) 20%, rgba(255,65,24,.18) 80%, transparent);
+}
+.first50-list-section::before { left: max(18px, calc(50% - 520px)); }
+.first50-list-section::after { right: max(18px, calc(50% - 520px)); }
+.first50-list-shell { width: min(1040px, calc(100% - 48px)); }
+.first50-list-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 0 4px; }
+.first50-list-heading > div { display: flex; align-items: center; gap: 12px; }
+.first50-list-heading div span { width: 8px; height: 8px; transform: rotate(45deg); background: var(--fire-red); box-shadow: 0 0 12px var(--fire-red); }
+.first50-list-heading strong { font-size: 20px; letter-spacing: 2px; }
+.first50-list-heading small { color: #8d635d; font-size: 12px; }
+.first50-list {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(25, minmax(64px, auto));
+  grid-auto-flow: column; gap: 8px 14px; list-style: none; counter-reset: member;
+}
+.first50-list li {
+  position: relative; display: grid; grid-template-columns: 58px minmax(0,1fr); align-items: center; gap: 14px;
+  min-height: 64px; padding: 10px 14px 10px 9px; overflow: hidden;
+  border: 1px solid rgba(255,70,26,.21); border-radius: 10px;
+  background: linear-gradient(100deg, rgba(255,64,25,.075), rgba(16,8,9,.86) 26%, rgba(9,7,8,.92));
+  box-shadow: inset 3px 0 0 rgba(255,64,24,.7); transition: transform .2s, border-color .2s, background .2s;
+}
+.first50-list li::after {
+  content: ''; position: absolute; right: -28px; top: 50%; width: 70px; height: 70px; transform: translateY(-50%) rotate(45deg);
+  border: 1px solid rgba(255,65,24,.08); pointer-events: none;
+}
+.first50-list li:hover { transform: translateX(5px); border-color: rgba(255,80,30,.48); background: linear-gradient(100deg, rgba(255,64,25,.13), rgba(18,8,9,.9) 30%, rgba(9,7,8,.95)); }
+.first50-index {
+  display: grid; place-items: center; height: 42px; border-right: 1px solid rgba(255,78,30,.2);
+  color: #ff7542; font: italic 700 21px/1 Georgia, serif; text-shadow: 0 0 12px rgba(255,56,20,.25);
+}
+.first50-name {
+  min-width: 0; color: #f3ece6; font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'Arial Unicode MS', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 17px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; letter-spacing: .2px;
+}
+.first50-endmark { display: flex; align-items: center; gap: 16px; margin: 32px auto 0; max-width: 360px; }
+.first50-endmark span { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,77,30,.3)); }
+.first50-endmark span:last-child { background: linear-gradient(90deg, rgba(255,77,30,.3), transparent); }
+.first50-endmark i { color: #7b4e47; font: normal 10px/1 Georgia, serif; letter-spacing: 3px; }
+.first50-footer { padding: 30px 0; border-top: 1px solid rgba(255,71,28,.12); background: rgba(5,3,4,.6); }
+.first50-footer .first50-shell { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.first50-footer p { color: #72514c; font-size: 11px; letter-spacing: 2px; }
+.first50-footer a { color: #946b64; text-decoration: none; font-size: 12px; }
+.first50-footer a:hover { color: #ff9f73; }
+
+@media (max-width: 640px) {
+  .first50-shell, .first50-list-shell { width: min(100% - 28px, 1040px); }
+  .first50-topbar-inner { height: 60px; }
+  .first50-hero { padding: 70px 0 62px; }
+  .first50-hero::after { font-size: 210px; top: 24px; }
+  .first50-hero h1 { font-size: 48px; }
+  .first50-subtitle { font-size: 13px; letter-spacing: 2px; }
+  .first50-stats { width: 100%; justify-content: space-around; gap: 10px; }
+  .first50-list-section { padding: 52px 0 75px; }
+  .first50-actions { gap: 9px; }
+  .first50-export-btn { padding: 8px 10px; font-size: 11px; }
+  .first50-back { display: none; }
+  .first50-list { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
+  .first50-list li { grid-template-columns: 52px minmax(0,1fr); gap: 13px; min-height: 64px; padding: 10px 13px 10px 8px; }
+  .first50-index { height: 38px; font-size: 18px; }
+  .first50-name { font-size: 17px; }
+  .first50-footer .first50-shell { flex-direction: column; text-align: center; }
+}
+
+.first50-export-stage {
+  position: fixed; left: -20000px; top: 0; width: 1080px; z-index: -1; pointer-events: none;
+}
+.first50-export-clone { width: 1080px !important; }
+.first50-export-clone .first50-shell { width: min(1040px, calc(100% - 48px)) !important; }
+.first50-export-clone .first50-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(25, minmax(64px, auto)) !important;
+  grid-auto-flow: column !important;
+}
+.first50-export-clone .first50-list li { grid-template-columns: 58px minmax(0, 1fr) !important; }
+.first50-export-clone .first50-name { font-size: 17px !important; }

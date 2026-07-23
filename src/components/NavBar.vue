@@ -2,6 +2,7 @@
   <nav class="nav">
     <div class="container nav-inner">
       <div class="nav-actions">
+        <a class="btn btn-ghost" href="/first50/">首批名单</a>
         <a class="btn btn-ghost" href="/activate/">激活流程</a>
         <a class="btn btn-ghost" href="/result/">查看结果</a>
         <button class="btn btn-primary" @click="$emit('reset')">

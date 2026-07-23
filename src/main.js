@@ -3,18 +3,23 @@ import './style.css'
 import App from './App.vue'
 import ResultsPage from './ResultsPage.vue'
 import ActivationPage from './ActivationPage.vue'
+import First50Page from './First50Page.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
   || normalizedPath.endsWith('/result/index.html')
 const isActivationPage = normalizedPath === '/activate'
   || normalizedPath.endsWith('/activate/index.html')
+const isFirst50Page = normalizedPath === '/first50'
+  || normalizedPath.endsWith('/first50/index.html')
 
-const RootComponent = isActivationPage
-  ? ActivationPage
-  : isResultsPage
-    ? ResultsPage
-    : App
+const RootComponent = isFirst50Page
+  ? First50Page
+  : isActivationPage
+    ? ActivationPage
+    : isResultsPage
+      ? ResultsPage
+      : App
 
 if (RootComponent === ResultsPage) {
   document.title = '用户票选结果 - 十周年盲盒'
@@ -29,6 +34,14 @@ if (RootComponent === ActivationPage) {
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
     '天火卡预约实名、开卡激活、购买流量及下单流程说明。',
+  )
+}
+
+if (RootComponent === First50Page) {
+  document.title = '天火卡首批 50 人名单'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '天火卡首批 50 人入选名单。',
   )
 }
 
