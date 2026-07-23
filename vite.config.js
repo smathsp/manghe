@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         result: 'result/index.html',
+        activate: 'activate/index.html',
       },
     },
   },
