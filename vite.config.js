@@ -11,6 +11,7 @@ export default defineConfig({
         result: 'result/index.html',
         activate: 'activate/index.html',
         first50: 'first50/index.html',
+        thanks: 'thanks/index.html',
       },
     },
   },

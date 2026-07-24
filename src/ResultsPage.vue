@@ -17,20 +17,45 @@ const waitForImages = (container) => Promise.all(
   }),
 )
 
+const preserveExportImageRatios = (container) => {
+  container.querySelectorAll('.winner-visual img').forEach(image => {
+    if (!image.naturalWidth || !image.naturalHeight) return
+
+    const maxSize = 84
+    const scale = Math.min(
+      maxSize / image.naturalWidth,
+      maxSize / image.naturalHeight,
+    )
+
+    image.style.width = `${Math.round(image.naturalWidth * scale)}px`
+    image.style.height = `${Math.round(image.naturalHeight * scale)}px`
+    image.style.objectFit = 'fill'
+  })
+}
+
 const exportPng = async () => {
   if (isExporting.value || !resultsPageRef.value) return
 
   isExporting.value = true
+  let exportNode
 
   try {
     await nextTick()
     await document.fonts?.ready
-    await waitForImages(resultsPageRef.value)
 
     const { default: html2canvas } = await import('html2canvas')
-    const width = resultsPageRef.value.scrollWidth
-    const height = resultsPageRef.value.scrollHeight
-    const canvas = await html2canvas(resultsPageRef.value, {
+    exportNode = resultsPageRef.value.cloneNode(true)
+    exportNode.classList.add('results-page-export')
+    exportNode.setAttribute('aria-hidden', 'true')
+    exportNode.querySelectorAll('[data-html2canvas-ignore]').forEach(element => element.remove())
+    document.body.appendChild(exportNode)
+
+    await waitForImages(exportNode)
+    preserveExportImageRatios(exportNode)
+
+    const width = exportNode.offsetWidth
+    const height = exportNode.scrollHeight
+    const canvas = await html2canvas(exportNode, {
       scale: 2,
       width,
       height,
@@ -58,6 +83,7 @@ const exportPng = async () => {
     console.error('导出 PNG 失败：', error)
     window.alert('PNG 导出失败，请稍后重试。')
   } finally {
+    exportNode?.remove()
     isExporting.value = false
   }
 }

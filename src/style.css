@@ -804,6 +804,85 @@ body {
   .results-footer .results-shell { flex-direction: column; text-align: center; }
 }
 
+/* Fixed-layout poster used only for 2× PNG export. */
+.results-page-export {
+  position: fixed; top: 0; left: 0; z-index: -9999; width: 1080px; min-height: 0;
+  pointer-events: none; background:
+    radial-gradient(circle at 50% 0, rgba(212,168,67,.16), transparent 420px),
+    #07070b;
+}
+.results-page-export .results-nav { display: none; }
+.results-page-export .results-shell { width: 960px; }
+.results-page-export .results-hero::before {
+  opacity: .16; background-size: 54px 54px; mask-image: none;
+}
+.results-page-export .results-hero-inner { padding: 62px 0 54px; }
+.results-page-export .results-hero-inner::after { top: 20px; font-size: 190px; }
+.results-page-export .results-kicker { margin-bottom: 18px; color: #c0b8aa; }
+.results-page-export .results-hero h1 {
+  color: #f8f3e9; font-size: 62px; line-height: 1.02; letter-spacing: -2px;
+}
+.results-page-export .results-hero h1 em {
+  color: #e8c96f; background: none; -webkit-background-clip: border-box;
+  background-clip: border-box; -webkit-text-fill-color: #e8c96f;
+}
+.results-page-export .results-hero p {
+  max-width: 650px; margin-top: 18px; color: #aaa5ab; font-size: 14px;
+}
+.results-page-export .result-summary {
+  display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr) 1px minmax(0, 1fr);
+  width: 100%; margin-top: 28px; padding: 15px 26px; gap: 28px; box-sizing: border-box;
+  border-color: rgba(232,201,111,.28); background: #111014; box-shadow: none;
+}
+.results-page-export .result-summary div {
+  display: grid; min-width: 0; place-items: center; gap: 4px;
+}
+.results-page-export .result-summary strong { color: #f0d688; font-size: 21px; }
+.results-page-export .result-summary span { color: #8e8990; font-size: 9px; }
+.results-page-export .ranking-section { padding: 52px 0 44px; }
+.results-page-export .ranking-group { margin-bottom: 48px; }
+.results-page-export .ranking-header { align-items: center; margin-bottom: 18px; }
+.results-page-export .ranking-title-block { gap: 14px; }
+.results-page-export .ranking-gem { width: 32px; height: 32px; box-shadow: none; }
+.results-page-export .ranking-title-block h2 { font-size: 25px; }
+.results-page-export .ranking-meta {
+  flex-direction: row; align-items: baseline; gap: 12px; text-align: left; color: #8b878e;
+}
+.results-page-export .ranking-meta span { font-size: 10px; }
+.results-page-export .winner-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;
+}
+.results-page-export .winner-card {
+  padding: 14px; border-color: rgba(255,255,255,.11); border-radius: 14px;
+  background: #111116; box-shadow: none; transform: none;
+}
+.results-page-export .winner-card-top { background: rgba(var(--accent-rgb),.075); }
+.results-page-export .winner-card::after { opacity: 1; }
+.results-page-export .winner-rank strong { font-size: 20px; }
+.results-page-export .winner-visual { height: 90px; margin: 4px 0 10px; }
+.results-page-export .winner-visual::before {
+  width: 72px; height: 72px; background: rgba(var(--accent-rgb),.1); filter: none;
+}
+.results-page-export .winner-visual img {
+  width: 84px; height: 84px; object-fit: contain; filter: none;
+}
+.results-page-export .winner-visual > span { font-size: 28px; }
+.results-page-export .winner-card-text .winner-visual { height: 66px; margin: 8px 0 16px; }
+.results-page-export .winner-info h3 { height: 36px; color: #f1ede6; font-size: 13px; }
+.results-page-export .vote-row { margin-top: 8px; }
+.results-page-export .vote-row > strong { font-size: 19px; }
+.results-page-export .winner-badge { display: block; }
+.results-page-export .results-note {
+  max-width: 760px; margin-top: 0; padding: 18px 22px; color: #99959c;
+}
+.results-page-export .results-note strong { color: #d0cbc2; }
+.results-page-export .results-footer { padding: 24px 0; }
+.results-page-export .results-footer .results-shell {
+  flex-direction: row; justify-content: space-between; text-align: left;
+}
+.results-page-export .results-footer p { color: #77737a; }
+.results-page-export .results-footer a { display: none; }
+
 /* ===== Tianhuo Activation Guide ===== */
 .activation-page {
   --activation-bg: #08090b;

@@ -4,6 +4,7 @@ import App from './App.vue'
 import ResultsPage from './ResultsPage.vue'
 import ActivationPage from './ActivationPage.vue'
 import First50Page from './First50Page.vue'
+import ThanksPage from './ThanksPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -12,14 +13,26 @@ const isActivationPage = normalizedPath === '/activate'
   || normalizedPath.endsWith('/activate/index.html')
 const isFirst50Page = normalizedPath === '/first50'
   || normalizedPath.endsWith('/first50/index.html')
+const isThanksPage = normalizedPath === '/thanks'
+  || normalizedPath.endsWith('/thanks/index.html')
 
-const RootComponent = isFirst50Page
-  ? First50Page
-  : isActivationPage
-    ? ActivationPage
-    : isResultsPage
-      ? ResultsPage
-      : App
+const RootComponent = isThanksPage
+  ? ThanksPage
+  : isFirst50Page
+    ? First50Page
+    : isActivationPage
+      ? ActivationPage
+      : isResultsPage
+        ? ResultsPage
+        : App
+
+if (RootComponent === ThanksPage) {
+  document.title = '鲲鹏张导感恩名单'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '感谢每一位并肩同行、真诚支持鲲鹏张导的朋友。名单不分先后，真心同样珍贵。',
+  )
+}
 
 if (RootComponent === ResultsPage) {
   document.title = '用户票选结果 - 十周年盲盒'
