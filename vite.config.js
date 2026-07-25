@@ -12,6 +12,7 @@ export default defineConfig({
         activate: 'activate/index.html',
         first50: 'first50/index.html',
         thanks: 'thanks/index.html',
+        voidBox: 'void-box/index.html',
         mail: 'mail/index.html',
       },
     },

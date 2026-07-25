@@ -6,6 +6,7 @@ import ActivationPage from './ActivationPage.vue'
 import First50Page from './First50Page.vue'
 import ThanksPage from './ThanksPage.vue'
 import MailboxPage from './MailboxPage.vue'
+import VoidBoxPage from './VoidBoxPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -16,6 +17,8 @@ const isFirst50Page = normalizedPath === '/first50'
   || normalizedPath.endsWith('/first50/index.html')
 const isThanksPage = normalizedPath === '/thanks'
   || normalizedPath.endsWith('/thanks/index.html')
+const isVoidBoxPage = normalizedPath === '/void-box'
+  || normalizedPath.endsWith('/void-box/index.html')
 const isMailboxDomainRoot = window.location.hostname === 'zd.smathsp.com'
   && (normalizedPath === '' || normalizedPath === '/index.html')
 const isMailboxPage = isMailboxDomainRoot
@@ -24,6 +27,8 @@ const isMailboxPage = isMailboxDomainRoot
 
 const RootComponent = isMailboxPage
   ? MailboxPage
+  : isVoidBoxPage
+    ? VoidBoxPage
   : isThanksPage
     ? ThanksPage
   : isFirst50Page
@@ -47,6 +52,14 @@ if (RootComponent === ThanksPage) {
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
     '感谢每一位并肩同行、真诚支持鲲鹏张导的朋友。名单不分先后，真心同样珍贵。',
+  )
+}
+
+if (RootComponent === VoidBoxPage) {
+  document.title = '虚空大帝盲盒名单'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '虚空大帝盲盒 64 份订单登记名单，按订单时间排序。',
   )
 }
 
