@@ -4,6 +4,7 @@ import { KUNPENG_SUPPORTERS, SELECTED_SUPPORTERS } from './data/gratitude'
 import './thanks.css'
 
 const visible = ref(false)
+const isExportMode = new URLSearchParams(window.location.search).has('export')
 
 const gratitudeEchoes = [
   '谢谢你的相信',
@@ -26,7 +27,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="gratitude-page" :class="{ 'is-visible': visible }">
+  <main class="gratitude-page" :class="{ 'is-visible': visible, 'is-export': isExportMode }">
     <header class="gratitude-nav">
       <div class="gratitude-shell gratitude-nav-inner">
         <a class="gratitude-brand" href="/" aria-label="返回首页">

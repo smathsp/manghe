@@ -5,6 +5,7 @@ import ResultsPage from './ResultsPage.vue'
 import ActivationPage from './ActivationPage.vue'
 import First50Page from './First50Page.vue'
 import ThanksPage from './ThanksPage.vue'
+import MailboxPage from './MailboxPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -15,9 +16,13 @@ const isFirst50Page = normalizedPath === '/first50'
   || normalizedPath.endsWith('/first50/index.html')
 const isThanksPage = normalizedPath === '/thanks'
   || normalizedPath.endsWith('/thanks/index.html')
+const isMailboxPage = normalizedPath === '/mail'
+  || normalizedPath.endsWith('/mail/index.html')
 
-const RootComponent = isThanksPage
-  ? ThanksPage
+const RootComponent = isMailboxPage
+  ? MailboxPage
+  : isThanksPage
+    ? ThanksPage
   : isFirst50Page
     ? First50Page
     : isActivationPage
@@ -25,6 +30,14 @@ const RootComponent = isThanksPage
       : isResultsPage
         ? ResultsPage
         : App
+
+if (RootComponent === MailboxPage) {
+  document.title = '时光信箱｜把想说的话，一封封打开'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '走进时光信箱，打开一格信箱，让写给不同人的信一封封呈现在眼前。',
+  )
+}
 
 if (RootComponent === ThanksPage) {
   document.title = '鲲鹏张导感恩名单'

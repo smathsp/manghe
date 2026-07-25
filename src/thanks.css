@@ -1050,3 +1050,22 @@
     transition: none;
   }
 }
+
+/* Stable full-page composition used by the image export route. */
+.gratitude-page.is-export::before,
+.gratitude-page.is-export::after,
+.gratitude-page.is-export .gratitude-marquee-track,
+.gratitude-page.is-export .gratitude-scroll-hint span,
+.gratitude-page.is-export .gratitude-card {
+  animation: none;
+}
+
+.gratitude-page.is-export .gratitude-card {
+  opacity: 1;
+  transform: none;
+}
+
+.gratitude-page.is-export .gratitude-column-header {
+  position: relative;
+  top: auto;
+}
