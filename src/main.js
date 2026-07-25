@@ -16,8 +16,9 @@ const isFirst50Page = normalizedPath === '/first50'
   || normalizedPath.endsWith('/first50/index.html')
 const isThanksPage = normalizedPath === '/thanks'
   || normalizedPath.endsWith('/thanks/index.html')
-const isMailboxDomain = window.location.hostname === 'zd.smathsp.com'
-const isMailboxPage = isMailboxDomain
+const isMailboxDomainRoot = window.location.hostname === 'zd.smathsp.com'
+  && (normalizedPath === '' || normalizedPath === '/index.html')
+const isMailboxPage = isMailboxDomainRoot
   || normalizedPath === '/mail'
   || normalizedPath.endsWith('/mail/index.html')
 
