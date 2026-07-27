@@ -93,10 +93,10 @@ if (RootComponent === First50Page) {
 }
 
 if (RootComponent === ScreeningPage) {
-  document.title = '鲲鹏 CPE｜直播初筛'
+  document.title = '天火卡｜直播筛选'
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
-    '鲲鹏 CPE 直播初筛操作页面，展示申请原图并实时同步筛选结果。',
+    '天火卡直播筛选页面，展示申请问答和原图并实时同步筛选结果。',
   )
 }
 

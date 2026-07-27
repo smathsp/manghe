@@ -117,7 +117,7 @@ const note = ref('')
 const syncing = ref(false)
 const result = ref(null)
 const savedResults = ref({})
-const imageZoomed = ref(false)
+const showImageLightbox = ref(false)
 let revealTimer
 
 const current = computed(() => records[currentIndex.value])
@@ -127,13 +127,11 @@ const currentGroup = computed(() => (
   || current.value.groups[0]
 ))
 const processedCount = computed(() => Object.keys(savedResults.value).length)
-const passedCount = computed(() => Object.values(savedResults.value).filter((item) => item.result === '通过').length)
-const failedCount = computed(() => processedCount.value - passedCount.value)
 const progress = computed(() => Math.round((processedCount.value / records.length) * 100))
 
 function selectImage(index) {
   currentImageIndex.value = index
-  imageZoomed.value = false
+  showImageLightbox.value = false
 }
 
 function selectGroup(groupId) {
@@ -150,7 +148,7 @@ function showRecord(index) {
   currentIndex.value = index
   currentImageIndex.value = 0
   activeGroupId.value = 'story'
-  imageZoomed.value = false
+  showImageLightbox.value = false
   result.value = null
   note.value = savedResults.value[records[index].id]?.note || ''
 }
@@ -190,7 +188,7 @@ async function saveDecision(decision) {
       currentImageIndex.value = 0
       activeGroupId.value = 'story'
       note.value = savedResults.value[records[currentIndex.value].id]?.note || ''
-      imageZoomed.value = false
+      showImageLightbox.value = false
       await nextTick()
       result.value = null
     }
@@ -208,7 +206,7 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
       <div class="screening-brand">
         <div class="brand-orbit" aria-hidden="true"><span>鲲</span></div>
         <div>
-          <strong>鲲鹏 CPE 直播初筛</strong>
+          <strong>天火卡直播筛选</strong>
           <small>KUNPENG · LIVE SCREENING</small>
         </div>
       </div>
@@ -242,16 +240,16 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
           <span class="original-badge">原图展示 · 未裁剪</span>
         </div>
 
-        <div class="image-viewer" :class="{ 'is-zoomed': imageZoomed }">
+        <div class="image-viewer">
           <button
             class="image-canvas"
             type="button"
-            :aria-label="imageZoomed ? '缩小原图' : '放大原图'"
-            @click="imageZoomed = !imageZoomed"
+            aria-label="全屏查看原图"
+            @click="showImageLightbox = true"
           >
             <span class="image-grid" aria-hidden="true"></span>
             <img :src="currentImage.src" :alt="currentImage.label" />
-            <span class="zoom-hint">{{ imageZoomed ? '点击恢复' : '点击放大' }}</span>
+            <span class="zoom-hint">全屏查看原图</span>
           </button>
           <div class="image-caption">
             <span>{{ currentImage.label }}</span>
@@ -354,13 +352,6 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
           </ol>
         </div>
 
-        <div class="summary-card">
-          <div><span>已通过</span><strong>{{ passedCount }}</strong></div>
-          <i></i>
-          <div><span>未通过</span><strong>{{ failedCount }}</strong></div>
-          <i></i>
-          <div><span>待筛选</span><strong>{{ records.length - processedCount }}</strong></div>
-        </div>
       </aside>
     </section>
 
@@ -397,6 +388,29 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
         <div><strong>通过</strong><small>APPROVE</small></div>
       </button>
     </footer>
+
+    <Transition name="result-reveal">
+      <div
+        v-if="showImageLightbox"
+        class="image-lightbox"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="currentImage.label"
+        @click.self="showImageLightbox = false"
+      >
+        <div class="lightbox-head">
+          <div>
+            <small>ORIGINAL IMAGE</small>
+            <strong>{{ currentImage.label }}</strong>
+          </div>
+          <button type="button" aria-label="关闭原图" @click="showImageLightbox = false">
+            ×
+          </button>
+        </div>
+        <img :src="currentImage.src" :alt="currentImage.label" />
+        <p>原图 {{ currentImageIndex + 1 }} / {{ current.images.length }} · 点击空白处关闭</p>
+      </div>
+    </Transition>
 
     <Transition name="result-reveal">
       <div v-if="syncing || result" class="result-overlay" :class="result === '通过' ? 'is-pass' : 'is-reject'">

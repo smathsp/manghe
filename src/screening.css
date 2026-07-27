@@ -574,6 +574,14 @@ button {
   background: rgba(85, 216, 139, .075);
 }
 
+.question-groups button:focus {
+  outline: none;
+}
+
+.question-groups button:focus-visible {
+  box-shadow: 0 0 0 2px rgba(85, 216, 139, .34);
+}
+
 .question-groups button.active span {
   color: #83eaaa;
   background: rgba(85, 216, 139, .12);
@@ -1016,5 +1024,299 @@ button {
     transition-duration: .01ms !important;
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* 直播画面布局：以 1280 × 720 为最低可读基准 */
+html,
+body,
+#app {
+  min-width: 1024px;
+}
+
+.screening-page {
+  grid-template-rows: 68px minmax(0, 1fr) 100px;
+  min-height: 620px;
+}
+
+.screening-topbar {
+  padding: 0 24px;
+}
+
+.screening-brand strong {
+  font-size: 18px;
+}
+
+.screening-progress {
+  width: 220px;
+}
+
+.screening-stage {
+  grid-template-columns: minmax(0, 1.18fr) minmax(430px, .82fr);
+  gap: 14px;
+  padding: 12px 18px;
+}
+
+.image-panel,
+.review-panel {
+  min-width: 0;
+}
+
+.image-panel,
+.review-panel > div {
+  border-radius: 14px;
+}
+
+.image-panel {
+  grid-template-rows: 46px minmax(0, 1fr) 56px;
+  padding: 13px;
+  overflow: hidden;
+}
+
+.image-panel-head strong {
+  font-size: 17px;
+}
+
+.original-badge,
+.image-caption {
+  font-size: 11px;
+}
+
+.image-canvas {
+  padding: 18px;
+  overflow: hidden;
+}
+
+.image-canvas img {
+  max-width: 88%;
+  max-height: 88%;
+  transition: transform .22s ease;
+}
+
+.image-canvas:hover img {
+  transform: scale(1.025);
+}
+
+.zoom-hint {
+  font-size: 10px;
+}
+
+.image-strip {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-color: rgba(109, 139, 123, .3) transparent;
+  scrollbar-width: thin;
+}
+
+.image-strip button {
+  flex: 0 0 88px;
+  min-width: 0;
+  font-size: 10px;
+}
+
+.image-strip img {
+  width: 38px;
+  height: 32px;
+}
+
+.review-panel {
+  grid-template-rows: 124px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.candidate-card {
+  padding: 12px 16px 9px;
+}
+
+.candidate-title span {
+  font-size: 11px;
+}
+
+.candidate-identity {
+  padding: 10px 0;
+}
+
+.candidate-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.candidate-identity h1 {
+  font-size: 21px;
+}
+
+.candidate-identity p,
+.record-switcher button {
+  font-size: 11px;
+}
+
+.responses-card {
+  padding: 13px 15px;
+}
+
+.responses-heading strong {
+  font-size: 17px;
+}
+
+.responses-heading > span {
+  max-width: 220px;
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.question-groups {
+  gap: 6px;
+  padding: 10px 0 4px;
+}
+
+.question-groups button {
+  padding: 8px 4px;
+  font-size: 11px;
+}
+
+.responses-list {
+  gap: 8px;
+  margin-top: 9px;
+  max-height: calc(100% - 92px);
+}
+
+.responses-list li {
+  grid-template-columns: 40px 1fr;
+  min-height: 66px;
+  padding: 11px 12px;
+}
+
+.response-number {
+  font-size: 11px;
+}
+
+.responses-list small {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.responses-list p {
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.response-image-link {
+  font-size: 11px;
+}
+
+.decision-bar {
+  grid-template-columns: minmax(205px, .55fr) minmax(380px, 1.5fr) minmax(205px, .55fr);
+  gap: 11px;
+  padding: 10px 18px 12px;
+}
+
+.decision-button strong {
+  font-size: 20px;
+}
+
+.note-field {
+  grid-template-columns: 120px 1fr auto;
+}
+
+.note-field > span,
+.note-field textarea {
+  font-size: 14px;
+}
+
+.note-field > small {
+  font-size: 10px;
+}
+
+.image-lightbox {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 64px minmax(0, 1fr) 32px;
+  padding: 16px 26px 14px;
+  color: var(--screening-text);
+  background: rgba(2, 7, 5, .96);
+  backdrop-filter: blur(18px);
+}
+
+.lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(100%, 1500px);
+  margin: 0 auto;
+}
+
+.lightbox-head small,
+.lightbox-head strong {
+  display: block;
+}
+
+.lightbox-head small {
+  color: #60766b;
+  font-size: 10px;
+  letter-spacing: .2em;
+}
+
+.lightbox-head strong {
+  margin-top: 4px;
+  font-size: 17px;
+}
+
+.lightbox-head button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 50%;
+  color: #dce9e2;
+  cursor: pointer;
+  background: rgba(255,255,255,.05);
+  font-size: 25px;
+}
+
+.image-lightbox > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+
+.image-lightbox > p {
+  margin: 7px 0 0;
+  color: #71867b;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-align: center;
+}
+
+@media (max-height: 700px) {
+  .screening-page {
+    grid-template-rows: 62px minmax(0, 1fr) 92px;
+    min-height: 580px;
+  }
+
+  .screening-stage {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .review-panel {
+    grid-template-rows: 112px minmax(0, 1fr);
+  }
+
+  .candidate-identity {
+    padding: 7px 0;
+  }
+
+  .responses-list li {
+    min-height: 58px;
+    padding-top: 9px;
+    padding-bottom: 9px;
   }
 }
