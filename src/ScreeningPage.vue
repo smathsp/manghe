@@ -398,6 +398,10 @@ function answerTone(answer) {
   return ''
 }
 
+function shouldShowEvidence(answer) {
+  return normalizeText(answer) === '是'
+}
+
 function linkedQuestions(group) {
   return group.questions.filter((question) => question.evidence)
 }
@@ -917,37 +921,39 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
 
-                <header class="linked-evidence-heading">
-                  <span>Q{{ String(question.evidence.number).padStart(2, '0') }}</span>
-                  <div>
-                    <small>ORIGINAL IMAGE</small>
-                    <h3>{{ question.evidence.question }}</h3>
+                <template v-if="shouldShowEvidence(question.answer)">
+                  <header class="linked-evidence-heading">
+                    <span>Q{{ String(question.evidence.number).padStart(2, '0') }}</span>
+                    <div>
+                      <small>ORIGINAL IMAGE</small>
+                      <h3>{{ question.evidence.question }}</h3>
+                    </div>
+                    <em v-if="questionImages(question).length">
+                      {{ questionImages(question).length }} 张原图
+                    </em>
+                  </header>
+
+                  <div v-if="imageLoading" class="image-loading">
+                    <span class="spinner"></span>
+                    正在读取原图
                   </div>
-                  <em v-if="questionImages(question).length">
-                    {{ questionImages(question).length }} 张原图
-                  </em>
-                </header>
 
-                <div v-if="imageLoading" class="image-loading">
-                  <span class="spinner"></span>
-                  正在读取原图
-                </div>
+                  <div v-else-if="questionImages(question).length" class="evidence-images">
+                    <figure
+                      v-for="(image, imageIndex) in questionImages(question)"
+                      :key="image.src"
+                      @click="openEvidence(image)"
+                    >
+                      <img :src="image.src" :alt="`${question.evidence.question} ${imageIndex + 1}`">
+                      <figcaption>
+                        <span>原图 {{ imageIndex + 1 }} / {{ questionImages(question).length }}</span>
+                        <small>点击放大，再次点击关闭</small>
+                      </figcaption>
+                    </figure>
+                  </div>
 
-                <div v-else-if="questionImages(question).length" class="evidence-images">
-                  <figure
-                    v-for="(image, imageIndex) in questionImages(question)"
-                    :key="image.src"
-                    @click="openEvidence(image)"
-                  >
-                    <img :src="image.src" :alt="`${question.evidence.question} ${imageIndex + 1}`">
-                    <figcaption>
-                      <span>原图 {{ imageIndex + 1 }} / {{ questionImages(question).length }}</span>
-                      <small>点击放大，再次点击关闭</small>
-                    </figcaption>
-                  </figure>
-                </div>
-
-                <div v-else class="no-evidence">本题未提供附件</div>
+                  <div v-else class="no-evidence">本题未提供附件</div>
+                </template>
               </article>
             </div>
           </section>
