@@ -14,32 +14,32 @@ function buildQuestionGroups({
       id: 'device',
       label: '设备经历',
       questions: [
-        { number: 5, question: '你是否用过 5G 随身 WiFi / CPE 产品？', answer: '用过' },
-        { number: 6, question: '你是否有鲲鹏 5G CPE 产品？', answer: '有' },
-        { number: 7, question: '你用过谁家的 5G 产品？', answer: '鲲鹏、华为' },
+        { number: 5, question: '你是否用过 5G 随身 WiFi / CPE 产品？', shortLabel: '使用过 5G CPE', answer: '是', compact: true },
+        { number: 6, question: '你是否有鲲鹏 5G CPE 产品？', shortLabel: '拥有鲲鹏 5G CPE', answer: '是', compact: true },
+        { number: 7, question: '你用过谁家的 5G 产品？', shortLabel: '使用过的 5G 品牌', answer: '鲲鹏、华为', compact: true },
         { number: 9, question: '你有鲲鹏的哪些 5G CPE 产品？', answer: model, imageIndex: 0 },
-        { number: 11, question: '你是否用过鲲鹏的流量卡？', answer: '用过' },
+        { number: 11, question: '你是否用过鲲鹏的流量卡？', shortLabel: '使用过鲲鹏流量卡', answer: '是', compact: true },
       ],
     },
     {
       id: 'contribution',
       label: '参与贡献',
       questions: [
-        { number: 13, question: '你是否参加过鲲鹏产品的内测或公测活动？', answer: '参加过' },
+        { number: 13, question: '你是否参加过鲲鹏产品的内测或公测活动？', shortLabel: '参加内测或公测', answer: '是', compact: true },
         { number: 14, question: '你参加过哪些鲲鹏产品的内测或公测活动？', answer: publicTest },
-        { number: 15, question: '你参加过鲲鹏产品的种草活动？', answer: '参加过', imageIndex: 1, imageLabel: '发布作品截图' },
-        { number: 17, question: '你是否给鲲鹏团队反馈过问题帮助优化产品？', answer: '反馈过', imageIndex: 2, imageLabel: '问题反馈沟通截图' },
-        { number: 19, question: '你是否给身边的朋友推荐过鲲鹏的产品？', answer: '推荐过', imageIndex: 3, imageLabel: '推荐证明截图' },
-        { number: 21, question: '你是否在其他媒体渠道发布过鲲鹏产品的开箱内容？', answer: activity, imageIndex: 4, imageLabel: '开箱内容截图' },
+        { number: 15, question: '你参加过鲲鹏产品的种草活动？', shortLabel: '参加产品种草活动', answer: '是', compact: true, imageIndex: 1, imageLabel: '发布作品截图', evidenceNumber: 16, evidenceQuestion: '请提供你发布作品的截图' },
+        { number: 17, question: '你是否给鲲鹏团队反馈过问题帮助优化产品？', shortLabel: '反馈问题帮助优化', answer: '是', compact: true, imageIndex: 2, imageLabel: '问题反馈沟通截图', evidenceNumber: 18, evidenceQuestion: '请提供和鲲鹏团队反馈问题的沟通截图' },
+        { number: 19, question: '你是否给身边的朋友推荐过鲲鹏的产品？', shortLabel: '向朋友推荐产品', answer: '是', compact: true, imageIndex: 3, imageLabel: '推荐证明截图', evidenceNumber: 20, evidenceQuestion: '请提供推荐鲲鹏产品的证明截图' },
+        { number: 21, question: '你是否在其他媒体渠道发布过鲲鹏产品的开箱内容？', shortLabel: '发布过产品开箱', answer: '是', detail: activity, compact: true, imageIndex: 4, imageLabel: '开箱内容截图', evidenceNumber: 22, evidenceQuestion: '请提供开箱内容的证明截图' },
       ],
     },
     {
       id: 'fan',
       label: '粉丝互动',
       questions: [
-        { number: 23, question: '你是否观看鲲鹏张导抖音的直播？', answer: '经常观看', imageIndex: 5, imageLabel: '鲲鹏张导粉丝灯牌截图' },
-        { number: 25, question: '你是否观看张导严选抖音号的直播？', answer: '经常观看', imageIndex: 6, imageLabel: '张导严选粉丝灯牌截图' },
-        { number: 27, question: '你是否有注册张导严选小店？', answer: '已注册', imageIndex: 7, imageLabel: '张导的店会员等级截图' },
+        { number: 23, question: '你是否观看鲲鹏张导抖音的直播？', shortLabel: '观看鲲鹏张导直播', answer: '是', compact: true, imageIndex: 5, imageLabel: '鲲鹏张导粉丝灯牌截图', evidenceNumber: 24, evidenceQuestion: '请提供观看粉丝灯牌截图' },
+        { number: 25, question: '你是否观看张导严选抖音号的直播？', shortLabel: '观看张导严选直播', answer: '是', compact: true, imageIndex: 6, imageLabel: '张导严选粉丝灯牌截图', evidenceNumber: 26, evidenceQuestion: '请提供观看粉丝灯牌截图' },
+        { number: 27, question: '你是否有注册张导严选小店？', shortLabel: '注册张导严选小店', answer: '是', compact: true, imageIndex: 7, imageLabel: '张导的店会员等级截图', evidenceNumber: 29, evidenceQuestion: '请提供张导的店会员等级截图' },
       ],
     },
     {
@@ -118,6 +118,20 @@ const lightboxImage = ref(null)
 let revealTimer
 
 const current = computed(() => records[currentIndex.value])
+
+function compactQuestions(group) {
+  return group.questions.filter((question) => question.compact)
+}
+
+function detailQuestions(group) {
+  return group.questions.filter((question) => !question.compact)
+}
+
+function evidenceQuestions(group) {
+  return group.questions.filter((question) => (
+    question.compact && question.imageIndex !== undefined
+  ))
+}
 
 function openEvidence(question) {
   if (question.imageIndex === undefined) return
@@ -231,9 +245,24 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
             <strong>{{ group.questions.length }} 项回答</strong>
           </header>
 
-          <div class="qa-stack">
+          <div v-if="compactQuestions(group).length" class="choice-summary">
+            <div
+              v-for="item in compactQuestions(group)"
+              :key="`choice-${item.number}`"
+              class="choice-summary-item"
+            >
+              <span>Q{{ String(item.number).padStart(2, '0') }}</span>
+              <div>
+                <small>{{ item.shortLabel || item.question }}</small>
+                <strong>{{ item.answer }}</strong>
+                <p v-if="item.detail">{{ item.detail }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="detailQuestions(group).length" class="qa-stack">
             <article
-              v-for="item in group.questions"
+              v-for="item in detailQuestions(group)"
               :key="item.number"
               class="qa-entry"
               :class="{ 'is-story': item.long, 'has-evidence': item.imageIndex !== undefined }"
@@ -267,6 +296,47 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
                 </span>
               </button>
             </article>
+          </div>
+
+          <div v-if="evidenceQuestions(group).length" class="evidence-section">
+            <header>
+              <span>PROOF MATERIALS</span>
+              <strong>对应证明材料</strong>
+            </header>
+            <div class="evidence-grid">
+              <article
+                v-for="item in evidenceQuestions(group)"
+                :key="`evidence-${item.number}`"
+                class="evidence-card"
+              >
+                <div class="evidence-question">
+                  <span>Q{{ String(item.evidenceNumber || item.number).padStart(2, '0') }}</span>
+                  <div>
+                    <small>{{ item.evidenceQuestion || item.question }}</small>
+                    <strong>{{ item.imageLabel }}</strong>
+                  </div>
+                </div>
+                <button
+                  class="inline-evidence"
+                  type="button"
+                  :aria-label="`全屏查看${current.images[item.imageIndex].label}`"
+                  @click="openEvidence(item)"
+                >
+                  <img
+                    :src="current.images[item.imageIndex].src"
+                    :alt="current.images[item.imageIndex].label"
+                    loading="lazy"
+                  />
+                  <span class="evidence-caption">
+                    <span>
+                      <small>ORIGINAL IMAGE</small>
+                      <strong>{{ item.imageLabel }}</strong>
+                    </span>
+                    <em>查看原图 ↗</em>
+                  </span>
+                </button>
+              </article>
+            </div>
           </div>
         </section>
 
