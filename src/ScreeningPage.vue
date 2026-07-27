@@ -35,22 +35,6 @@ const GROUPS = [
         compact: true,
       },
       {
-        number: 7,
-        question: '你用过谁家的 5G 产品？',
-        shortLabel: '使用过的 5G 品牌',
-        fields: ['你用过谁家的5G产品？'],
-        compact: true,
-      },
-      {
-        number: 8,
-        question: '没有鲲鹏 5G CPE，为什么申请天火卡？不能用怎么办？',
-        fields: [
-          '你没有鲲鹏5G CPE，为什么要申请天火卡，不能用怎么办？',
-          '你有鲲鹏的哪些5G CPE产品？-否，为什么要申请天火卡？不能用怎么办？-补充内容',
-          '是否有鲲鹏5G CPE产品？-其他-补充内容',
-        ],
-      },
-      {
         number: 9,
         question: '你有鲲鹏的哪些 5G CPE 产品？',
         fields: ['你有鲲鹏的哪些5G CPE产品？ 2'],
@@ -211,6 +195,8 @@ const lightboxImage = ref(null)
 const decisions = ref({})
 const revealResult = ref(null)
 const batchStorageKey = ref('')
+const batchName = ref('天火卡申请名单')
+const autoExported = ref(false)
 const validation = ref({ attachments: 0, missing: 0, multiple: 0 })
 let decisionTimer
 let imageLoadToken = 0
@@ -362,14 +348,21 @@ function questionImages(question) {
 }
 
 function compactQuestions(group) {
-  return group.questions.filter((question) => question.compact)
+  return group.questions.filter((question) => question.compact && !question.evidence)
 }
 
 function detailQuestions(group) {
   return group.questions.filter((question) => !question.compact)
 }
 
-function evidenceQuestions(group) {
+function answerTone(answer) {
+  const value = normalizeText(answer)
+  if (value === '是') return 'answer-yes'
+  if (value === '否') return 'answer-no'
+  return ''
+}
+
+function linkedQuestions(group) {
   return group.questions.filter((question) => question.evidence)
 }
 
@@ -513,6 +506,11 @@ async function importBatch() {
       builtRecords[0]?.id,
       builtRecords.at(-1)?.id,
     ].join(':')
+    batchName.value = zipFile.value.name
+      .replace(/\.zip$/i, '')
+      .replace(/_?附件$/i, '')
+      .trim() || '天火卡申请名单'
+    autoExported.value = false
     decisions.value = loadSavedDecisions(batchStorageKey.value)
     importState.value = 'ready'
     importMessage.value = `已从 ${csvSourceName} 载入 ${builtRecords.length} 条记录`
@@ -558,15 +556,24 @@ function saveDecision(decision) {
   if (!current.value) return
 
   const now = new Date()
-  decisions.value = {
+  const updatedDecisions = {
     ...decisions.value,
     [current.value.id]: {
       result: decision,
       time: now.toLocaleString('zh-CN', { hour12: false }),
     },
   }
+  decisions.value = updatedDecisions
   persistDecisions()
   revealResult.value = decision
+
+  const batchComplete = records.value.length > 0
+    && Object.keys(updatedDecisions).length === records.value.length
+
+  if (batchComplete && !autoExported.value) {
+    autoExported.value = true
+    exportResults(updatedDecisions)
+  }
 
   window.clearTimeout(decisionTimer)
   decisionTimer = window.setTimeout(() => {
@@ -575,7 +582,7 @@ function saveDecision(decision) {
     } else {
       revealResult.value = null
     }
-  }, 900)
+  }, 1150)
 }
 
 function csvEscape(value) {
@@ -587,13 +594,26 @@ function firstCharacter(value) {
   return Array.from(String(value || ''))[0] || '鲲'
 }
 
-function exportResults() {
+function formatExportTimestamp(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    '_',
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join('')
+}
+
+function exportResults(decisionSource = decisions.value) {
   const rows = records.value
-    .filter((record) => decisions.value[record.id])
+    .filter((record) => decisionSource[record.id])
     .map((record) => [
       record.id,
-      decisions.value[record.id].result,
-      decisions.value[record.id].time,
+      decisionSource[record.id].result,
+      decisionSource[record.id].time,
     ])
 
   if (!rows.length) return
@@ -607,7 +627,8 @@ function exportResults() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `直播筛选结果_${new Date().toISOString().slice(0, 10)}.csv`
+  const safeBatchName = batchName.value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+  link.download = `${safeBatchName}_直播筛选结果_${rows.length}人_${formatExportTimestamp()}.csv`
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -628,6 +649,8 @@ function resetBatch() {
   currentIndex.value = 0
   importState.value = 'idle'
   importMessage.value = ''
+  batchName.value = '天火卡申请名单'
+  autoExported.value = false
   lightboxImage.value = null
   revealResult.value = null
   if (bundleInput.value) bundleInput.value.value = ''
@@ -707,7 +730,7 @@ onBeforeUnmount(() => {
           <i :style="{ width: `${progressPercent}%` }"></i>
         </div>
         <div class="batch-actions">
-          <button type="button" :disabled="!reviewedCount" @click="exportResults">导出结果</button>
+          <button type="button" :disabled="!reviewedCount" @click="exportResults()">导出结果</button>
           <button type="button" class="quiet" @click="resetBatch">更换批次</button>
         </div>
       </aside>
@@ -782,7 +805,7 @@ onBeforeUnmount(() => {
                 <div class="question-number">Q{{ String(question.number).padStart(2, '0') }}</div>
                 <div>
                   <p>{{ question.shortLabel }}</p>
-                  <strong>{{ question.answer }}</strong>
+                  <strong :class="answerTone(question.answer)">{{ question.answer }}</strong>
                 </div>
               </article>
             </div>
@@ -798,7 +821,9 @@ onBeforeUnmount(() => {
                   <span>Q{{ String(question.number).padStart(2, '0') }}</span>
                   <p>{{ question.question }}</p>
                 </header>
-                <div class="detail-answer">{{ question.answer }}</div>
+                <div class="detail-answer" :class="answerTone(question.answer)">
+                  {{ question.answer }}
+                </div>
                 <div v-if="question.detail" class="detail-subanswer">
                   <span>{{ question.detailLabel }}</span>
                   {{ question.detail }}
@@ -806,13 +831,26 @@ onBeforeUnmount(() => {
               </article>
             </div>
 
-            <div v-if="evidenceQuestions(group).length" class="evidence-list">
+            <div v-if="linkedQuestions(group).length" class="linked-question-list">
               <article
-                v-for="question in evidenceQuestions(group)"
-                :key="`evidence-${question.number}`"
-                class="evidence-block"
+                v-for="question in linkedQuestions(group)"
+                :key="`linked-${question.number}`"
+                class="linked-question-block"
               >
-                <header>
+                <div
+                  class="linked-response"
+                  :class="{ empty: question.answer === '未填写' }"
+                >
+                  <span class="question-number">
+                    Q{{ String(question.number).padStart(2, '0') }}
+                  </span>
+                  <div>
+                    <p>{{ question.question }}</p>
+                    <strong :class="answerTone(question.answer)">{{ question.answer }}</strong>
+                  </div>
+                </div>
+
+                <header class="linked-evidence-heading">
                   <span>Q{{ String(question.evidence.number).padStart(2, '0') }}</span>
                   <div>
                     <small>ORIGINAL IMAGE</small>
@@ -869,10 +907,19 @@ onBeforeUnmount(() => {
         <strong>通过</strong>
       </button>
 
-      <div v-if="revealResult" class="decision-reveal" :class="revealResult === '通过' ? 'approve' : 'reject'">
-        <span>{{ revealResult === '通过' ? '✓' : '×' }}</span>
+      <div
+        v-if="revealResult"
+        class="decision-reveal"
+        :class="revealResult === '通过' ? 'approve' : 'reject'"
+        role="status"
+        aria-live="assertive"
+      >
+        <i class="decision-ring" aria-hidden="true"></i>
+        <span class="decision-symbol">{{ revealResult === '通过' ? '✓' : '×' }}</span>
         <strong>{{ revealResult }}</strong>
-        <small>结果已保存到本机</small>
+        <small>
+          {{ reviewedCount === records.length ? '全部完成 · 结果已自动导出' : '结果已保存到本机' }}
+        </small>
       </div>
     </template>
 
