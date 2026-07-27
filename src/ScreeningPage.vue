@@ -15,6 +15,9 @@ const ATTACHMENT_FIELDS = [
   '请提供张导的店会员等级截图',
 ]
 
+const TRAFFIC_CARD_DETAIL_FIELD = '请列出流量卡的累计充值金额，并提供ICCID。'
+const STANDARDIZED_ICCID_FIELD = 'ICCID标准化'
+
 const GROUPS = [
   {
     id: 'device',
@@ -215,12 +218,42 @@ function normalizeText(value) {
   return String(value ?? '').replace(/\r\n/g, '\n').trim()
 }
 
+function normalizeIccid(value) {
+  const source = normalizeText(value).toUpperCase()
+  const matched = source.match(/89(?:[\s-]?[0-9DOIL]){17,18}/)?.[0] || ''
+  const normalized = matched
+    .replace(/[\s-]/g, '')
+    .replace(/[DO]/g, '0')
+    .replace(/[IL]/g, '1')
+
+  return /^89\d{17,18}$/.test(normalized) ? normalized : ''
+}
+
+function maskIccid(value) {
+  const normalized = normalizeIccid(value)
+  if (!normalized) return '[ICCID 已隐藏]'
+  return `${normalized.slice(0, 4)} •••• •••• •••• ${normalized.slice(-4)}`
+}
+
 function redactSensitive(value) {
   return normalizeText(value)
     .replace(/\b1[3-9]\d{9}\b/g, '[手机号已隐藏]')
     .replace(/\b(?:[0-9a-f]{2}[:-]?){5}[0-9a-f]{2}\b/gi, '[MAC 已隐藏]')
-    .replace(/\b89\d{15,20}\b/g, '[ICCID 已隐藏]')
+    .replace(/\b89[0-9DOILdoil]{17,18}\b/g, (match) => maskIccid(match))
     .replace(/\bwxid_[a-z0-9_]+\b/gi, '[微信号已隐藏]')
+}
+
+function buildTrafficCard(row) {
+  const raw = normalizeText(row[TRAFFIC_CARD_DETAIL_FIELD])
+  const normalizedIccid = normalizeIccid(row[STANDARDIZED_ICCID_FIELD])
+    || normalizeIccid(raw)
+
+  return {
+    hasContent: Boolean(raw || normalizedIccid),
+    submission: raw ? redactSensitive(raw) : '未填写',
+    normalizedIccid,
+    maskedIccid: normalizedIccid ? maskIccid(normalizedIccid) : '未识别',
+  }
 }
 
 function getWechatNickname(value) {
@@ -259,12 +292,15 @@ function buildRecord(row, index) {
   const id = normalizeText(row['编号']) || String(index + 1)
   const douyinNickname = redactSensitive(row['你的抖音昵称'])
   const wechatNickname = getWechatNickname(row['你的微信号【微信昵称】'])
+  const wechatPhone = normalizeText(row['你的微信注册手机号'])
 
   return {
     id,
     nickname: douyinNickname || wechatNickname || `申请人 ${id}`,
     wechatNickname,
+    wechatPhone,
     submittedAt: normalizeText(row['提交时间']) || '时间未知',
+    trafficCard: buildTrafficCard(row),
     groups: GROUPS.map((group) => ({
       ...group,
       questions: group.questions.map((question) => buildQuestion(row, question)),
@@ -612,6 +648,8 @@ function exportResults(decisionSource = decisions.value) {
     .filter((record) => decisionSource[record.id])
     .map((record) => [
       record.id,
+      record.wechatPhone,
+      record.nickname,
       decisionSource[record.id].result,
       decisionSource[record.id].time,
     ])
@@ -619,7 +657,7 @@ function exportResults(decisionSource = decisions.value) {
   if (!rows.length) return
 
   const csv = [
-    ['编号', '直播筛选结果', '直播筛选时间'],
+    ['编号', '微信注册手机号', '昵称', '直播筛选结果', '直播筛选时间'],
     ...rows,
   ].map((row) => row.map(csvEscape).join(',')).join('\r\n')
 
@@ -809,6 +847,35 @@ onBeforeUnmount(() => {
                 </div>
               </article>
             </div>
+
+            <article
+              v-if="group.id === 'device'"
+              class="traffic-card-detail"
+              :class="{ empty: !current.trafficCard.hasContent }"
+            >
+              <header>
+                <span>Q12</span>
+                <div>
+                  <small>TRAFFIC CARD</small>
+                  <h3>流量卡累计充值金额与 ICCID</h3>
+                </div>
+                <em :class="{ warning: !current.trafficCard.normalizedIccid }">
+                  {{ current.trafficCard.normalizedIccid ? 'ICCID 已标准化' : 'ICCID 未识别' }}
+                </em>
+              </header>
+
+              <div class="traffic-card-grid">
+                <div class="traffic-submission">
+                  <span>申请人填写内容</span>
+                  <p>{{ current.trafficCard.submission }}</p>
+                </div>
+                <div class="masked-iccid">
+                  <span>标准化 ICCID · 隐私打码</span>
+                  <strong>{{ current.trafficCard.maskedIccid }}</strong>
+                  <small>直播画面仅显示首 4 位与末 4 位</small>
+                </div>
+              </div>
+            </article>
 
             <div v-if="detailQuestions(group).length" class="detail-question-list">
               <article

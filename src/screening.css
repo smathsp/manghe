@@ -340,6 +340,106 @@ button {
   background: rgba(218, 74, 68, 0.14);
 }
 
+.traffic-card-detail {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(91, 166, 125, 0.2);
+  border-radius: 18px;
+  background: rgba(8, 31, 22, 0.72);
+}
+
+.traffic-card-detail > header {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 18px;
+  border-bottom: 1px solid rgba(91, 166, 125, 0.16);
+}
+
+.traffic-card-detail > header > span {
+  color: #c7ab59;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.traffic-card-detail h3 {
+  margin: 3px 0 0;
+  color: #e1f0e8;
+  font-size: 16px;
+}
+
+.traffic-card-detail header em {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #86d9a8;
+  background: rgba(49, 153, 91, 0.15);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.traffic-card-detail header em.warning {
+  color: #e8b477;
+  background: rgba(191, 119, 42, 0.14);
+}
+
+.traffic-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 1px;
+  background: rgba(91, 166, 125, 0.14);
+}
+
+.traffic-submission,
+.masked-iccid {
+  min-width: 0;
+  padding: 18px 20px;
+  background: #071a13;
+}
+
+.traffic-submission > span,
+.masked-iccid > span {
+  display: block;
+  margin-bottom: 9px;
+  color: #779887;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.traffic-submission p {
+  margin: 0;
+  color: #dcece4;
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.masked-iccid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.masked-iccid strong {
+  color: #d8c073;
+  font: 700 18px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.masked-iccid small {
+  margin-top: 7px;
+  color: #668273;
+  font-size: 11px;
+}
+
+.traffic-card-detail.empty {
+  opacity: 0.62;
+}
+
 .compact-question.empty,
 .detail-question.empty {
   opacity: 0.58;
@@ -1145,8 +1245,18 @@ button {
   }
 
   .compact-question-grid,
-  .import-grid {
+  .import-grid,
+  .traffic-card-grid {
     grid-template-columns: 1fr;
+  }
+
+  .traffic-card-detail > header {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .traffic-card-detail header em {
+    grid-column: 2;
+    width: fit-content;
   }
 
   .question-section {
