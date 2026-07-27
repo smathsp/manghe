@@ -531,13 +531,61 @@ button {
   letter-spacing: .08em;
 }
 
+.question-groups {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 12px 0 4px;
+}
+
+.question-groups button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 1px solid rgba(197, 225, 210, .09);
+  border-radius: 8px;
+  color: #71867b;
+  cursor: pointer;
+  background: rgba(255,255,255,.018);
+  font-size: 9px;
+  letter-spacing: .04em;
+  transition: border-color .18s ease, color .18s ease, background .18s ease;
+}
+
+.question-groups button span {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+  color: #50655a;
+  background: rgba(255,255,255,.04);
+  font-family: "DIN Alternate", sans-serif;
+  font-size: 8px;
+}
+
+.question-groups button:hover,
+.question-groups button.active {
+  border-color: rgba(85, 216, 139, .3);
+  color: #bce8cd;
+  background: rgba(85, 216, 139, .075);
+}
+
+.question-groups button.active span {
+  color: #83eaaa;
+  background: rgba(85, 216, 139, .12);
+}
+
 .responses-list {
   display: grid;
   gap: 8px;
   margin: 13px 0 0;
   padding: 0;
   list-style: none;
-  max-height: calc(100% - 50px);
+  max-height: calc(100% - 98px);
   overflow: auto;
   scrollbar-color: rgba(109, 139, 123, .28) transparent;
   scrollbar-width: thin;
@@ -563,6 +611,15 @@ button {
     rgba(255,255,255,.018);
 }
 
+.responses-list li.has-image {
+  cursor: default;
+}
+
+.responses-list li.has-image.is-active {
+  border-color: rgba(85, 216, 139, .28);
+  box-shadow: inset 3px 0 0 rgba(85, 216, 139, .44);
+}
+
 .response-number {
   padding-top: 2px;
   color: #566b60;
@@ -586,6 +643,31 @@ button {
   color: #e1ece6;
   font-size: 12px;
   line-height: 1.65;
+}
+
+.response-image-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  color: #79c99a;
+  cursor: pointer;
+  background: transparent;
+  font-size: 9px;
+  text-align: left;
+}
+
+.response-image-link > span {
+  color: var(--screening-gold);
+  font-size: 11px;
+}
+
+.response-image-link i {
+  margin-left: auto;
+  color: #53685d;
+  font-style: normal;
 }
 
 .summary-card {

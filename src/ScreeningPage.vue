@@ -2,69 +2,117 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import './screening.css'
 
+function buildQuestionGroups({
+  model,
+  publicTest,
+  activity,
+  reason,
+  message,
+}) {
+  return [
+    {
+      id: 'device',
+      label: '设备经历',
+      questions: [
+        { number: 5, question: '你是否用过 5G 随身 WiFi / CPE 产品？', answer: '用过' },
+        { number: 6, question: '你是否有鲲鹏 5G CPE 产品？', answer: '有' },
+        { number: 7, question: '你用过谁家的 5G 产品？', answer: '鲲鹏、华为' },
+        { number: 9, question: '你有鲲鹏的哪些 5G CPE 产品？', answer: model, imageIndex: 0 },
+        { number: 11, question: '你是否用过鲲鹏的流量卡？', answer: '用过' },
+      ],
+    },
+    {
+      id: 'contribution',
+      label: '参与贡献',
+      questions: [
+        { number: 13, question: '你是否参加过鲲鹏产品的内测或公测活动？', answer: '参加过' },
+        { number: 14, question: '你参加过哪些鲲鹏产品的内测或公测活动？', answer: publicTest },
+        { number: 15, question: '你参加过鲲鹏产品的种草活动？', answer: '参加过', imageIndex: 1, imageLabel: '发布作品截图' },
+        { number: 17, question: '你是否给鲲鹏团队反馈过问题帮助优化产品？', answer: '反馈过', imageIndex: 2, imageLabel: '问题反馈沟通截图' },
+        { number: 19, question: '你是否给身边的朋友推荐过鲲鹏的产品？', answer: '推荐过', imageIndex: 3, imageLabel: '推荐证明截图' },
+        { number: 21, question: '你是否在其他媒体渠道发布过鲲鹏产品的开箱内容？', answer: activity, imageIndex: 4, imageLabel: '开箱内容截图' },
+      ],
+    },
+    {
+      id: 'fan',
+      label: '粉丝互动',
+      questions: [
+        { number: 23, question: '你是否观看鲲鹏张导抖音的直播？', answer: '经常观看', imageIndex: 5, imageLabel: '鲲鹏张导粉丝灯牌截图' },
+        { number: 25, question: '你是否观看张导严选抖音号的直播？', answer: '经常观看', imageIndex: 6, imageLabel: '张导严选粉丝灯牌截图' },
+        { number: 27, question: '你是否有注册张导严选小店？', answer: '已注册', imageIndex: 7, imageLabel: '张导的店会员等级截图' },
+      ],
+    },
+    {
+      id: 'story',
+      label: '申请表达',
+      questions: [
+        { number: 30, question: '你为什么需要天火卡？', answer: reason, long: true },
+        { number: 31, question: '留下你想对张导说的话', answer: message, long: true },
+      ],
+    },
+  ]
+}
+
+const sharedEvidence = [
+  { src: '/images/C5800-688.png', label: 'Q09 · 鲲鹏 CPE 产品原图' },
+  { src: '/images/C5800-688-result.png', label: 'Q16 · 发布作品截图' },
+  { src: '/activation/figure-01.jpg', label: 'Q18 · 问题反馈沟通截图' },
+  { src: '/activation/figure-04.jpg', label: 'Q20 · 推荐证明截图' },
+  { src: '/activation/figure-05.jpg', label: 'Q22 · 开箱内容截图' },
+  { src: '/activation/figure-08.jpg', label: 'Q24 · 鲲鹏张导粉丝灯牌截图' },
+  { src: '/activation/figure-09.jpg', label: 'Q26 · 张导严选粉丝灯牌截图' },
+  { src: '/activation/figure-10.jpg', label: 'Q29 · 张导的店会员等级截图' },
+]
+
 const records = [
   {
     id: 'KP-2026-0047',
     nickname: '山海之间',
     submittedAt: '07-27 10:42',
-    images: [
-      { src: '/images/C5800-688.png', label: '设备正面原图' },
-      { src: '/images/C5800-688-result.png', label: '设备背面原图' },
-    ],
-    questions: [
-      { question: '你是否有鲲鹏 5G CPE 产品？', answer: '是' },
-      { question: '你目前使用的 CPE 型号是？', answer: '鲲鹏 C5800-688' },
-      { question: '你使用鲲鹏 CPE 多久了？', answer: '1 年以上' },
-      {
-        question: '请分享你与鲲鹏 CPE 的故事',
-        answer: '第一次接触鲲鹏是在一次户外直播中，稳定的网络让我顺利完成了整场直播。后来也把它带去过很多地方，它已经成为我出门时一定会带上的设备。',
-        long: true,
-      },
-    ],
+    images: sharedEvidence,
+    groups: buildQuestionGroups({
+      model: 'C5800-688、C2000MAX',
+      publicTest: 'C5800-688 公测、AK68-798 内测',
+      activity: '发布过 3 条鲲鹏产品开箱内容',
+      reason: '平时经常进行户外直播，现有流量套餐不够稳定，希望天火卡能成为直播时的主力网络。',
+      message: '感谢张导和团队这些年持续听取用户意见。希望鲲鹏越做越好，也祝十周年活动顺利！',
+    }),
   },
   {
     id: 'KP-2026-0048',
     nickname: '小满',
     submittedAt: '07-27 10:45',
-    images: [
-      { src: '/images/C2000PRO+.png', label: '设备原图' },
-      { src: '/images/AK68-798.png', label: '补充资料原图' },
-    ],
-    questions: [
-      { question: '你是否有鲲鹏 5G CPE 产品？', answer: '是' },
-      { question: '你目前使用的 CPE 型号是？', answer: '鲲鹏 C2000 Pro+' },
-      { question: '你通常在什么场景使用 CPE？', answer: '户外直播、房车旅行' },
-      {
-        question: '请分享你与鲲鹏 CPE 的故事',
-        answer: '它陪我走过不少城市。最深刻的一次是在山里临时开播，手机信号不稳定，但 CPE 让画面一直保持流畅。',
-        long: true,
-      },
-    ],
+    images: sharedEvidence.map((image, index) => index === 0
+      ? { src: '/images/C2000PRO+.png', label: 'Q09 · 鲲鹏 CPE 产品原图' }
+      : image),
+    groups: buildQuestionGroups({
+      model: 'C2000PRO+、AK68-798',
+      publicTest: 'C2000 系列公测、鲲鹏流量卡体验活动',
+      activity: '在抖音和小红书发布过开箱与测速内容',
+      reason: '需要在房车旅行和户外工作时保持稳定连接，天火卡的大流量和高上行很适合我的使用场景。',
+      message: '从第一台鲲鹏设备开始一直用到现在，谢谢团队认真对待每一次反馈。',
+    }),
   },
   {
     id: 'KP-2026-0049',
     nickname: '白昼星河',
     submittedAt: '07-27 10:51',
-    images: [
-      { src: '/images/N6800.png', label: '设备原图' },
-      { src: '/images/NBCPE-688.png', label: '设备铭牌原图' },
-      { src: '/images/AM5.png', label: '补充资料原图' },
-    ],
-    questions: [
-      { question: '你是否有鲲鹏 5G CPE 产品？', answer: '是' },
-      { question: '你目前使用的 CPE 型号是？', answer: '鲲鹏 N6800' },
-      { question: '你最看重 CPE 的哪一点？', answer: '稳定性和便携性' },
-      {
-        question: '请分享你与鲲鹏 CPE 的故事',
-        answer: '从日常备用网络到现在的直播主力设备，它带给我的不仅是稳定连接，也让我能更自由地选择工作和生活的地点。',
-        long: true,
-      },
-    ],
+    images: sharedEvidence.map((image, index) => index === 0
+      ? { src: '/images/NBCPE-688.png', label: 'Q09 · 鲲鹏 CPE 产品原图' }
+      : image),
+    groups: buildQuestionGroups({
+      model: 'NBCPE-688、C8-788',
+      publicTest: 'NBCPE-688 内测、C8-788 公测',
+      activity: '长期分享设备使用技巧和不同场景的网络表现',
+      reason: '有电竞直播和远程工作的需求，希望获得稳定的大流量网络，减少直播中断和延迟。',
+      message: '十年很不容易，感谢张导一直坚持做真正解决用户问题的产品，期待下一个十年。',
+    }),
   },
 ]
 
 const currentIndex = ref(0)
 const currentImageIndex = ref(0)
+const activeGroupId = ref('story')
 const note = ref('')
 const syncing = ref(false)
 const result = ref(null)
@@ -74,6 +122,10 @@ let revealTimer
 
 const current = computed(() => records[currentIndex.value])
 const currentImage = computed(() => current.value.images[currentImageIndex.value])
+const currentGroup = computed(() => (
+  current.value.groups.find((group) => group.id === activeGroupId.value)
+  || current.value.groups[0]
+))
 const processedCount = computed(() => Object.keys(savedResults.value).length)
 const passedCount = computed(() => Object.values(savedResults.value).filter((item) => item.result === '通过').length)
 const failedCount = computed(() => processedCount.value - passedCount.value)
@@ -84,10 +136,20 @@ function selectImage(index) {
   imageZoomed.value = false
 }
 
+function selectGroup(groupId) {
+  activeGroupId.value = groupId
+}
+
+function showEvidence(question) {
+  if (question.imageIndex === undefined) return
+  selectImage(question.imageIndex)
+}
+
 function showRecord(index) {
   if (syncing.value || index < 0 || index >= records.length) return
   currentIndex.value = index
   currentImageIndex.value = 0
+  activeGroupId.value = 'story'
   imageZoomed.value = false
   result.value = null
   note.value = savedResults.value[records[index].id]?.note || ''
@@ -126,6 +188,7 @@ async function saveDecision(decision) {
     if (currentIndex.value < records.length - 1) {
       currentIndex.value += 1
       currentImageIndex.value = 0
+      activeGroupId.value = 'story'
       note.value = savedResults.value[records[currentIndex.value].id]?.note || ''
       imageZoomed.value = false
       await nextTick()
@@ -246,19 +309,46 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
                 <strong>表单问答</strong>
               </div>
             </div>
-            <span>{{ current.questions.length }} 项内容</span>
+            <span>已隐藏手机号、MAC、ICCID 等敏感字段</span>
           </div>
+
+          <nav class="question-groups" aria-label="表单问题分组">
+            <button
+              v-for="group in current.groups"
+              :key="group.id"
+              type="button"
+              :class="{ active: activeGroupId === group.id }"
+              @click="selectGroup(group.id)"
+            >
+              {{ group.label }}
+              <span>{{ group.questions.length }}</span>
+            </button>
+          </nav>
 
           <ol class="responses-list">
             <li
-              v-for="(item, index) in current.questions"
-              :key="item.question"
-              :class="{ 'is-long': item.long }"
+              v-for="item in currentGroup.questions"
+              :key="item.number"
+              :class="{
+                'is-long': item.long,
+                'has-image': item.imageIndex !== undefined,
+                'is-active': item.imageIndex === currentImageIndex,
+              }"
             >
-              <span class="response-number">{{ String(index + 1).padStart(2, '0') }}</span>
+              <span class="response-number">Q{{ String(item.number).padStart(2, '0') }}</span>
               <div>
                 <small>{{ item.question }}</small>
                 <p>{{ item.answer }}</p>
+                <button
+                  v-if="item.imageIndex !== undefined"
+                  class="response-image-link"
+                  type="button"
+                  @click="showEvidence(item)"
+                >
+                  <span aria-hidden="true">▧</span>
+                  {{ item.imageLabel || '查看对应原图' }}
+                  <i>原图 {{ item.imageIndex + 1 }}</i>
+                </button>
               </div>
             </li>
           </ol>
