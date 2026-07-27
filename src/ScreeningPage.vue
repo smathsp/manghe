@@ -111,46 +111,33 @@ const records = [
 ]
 
 const currentIndex = ref(0)
-const currentImageIndex = ref(0)
-const activeGroupId = ref('story')
 const note = ref('')
 const syncing = ref(false)
 const result = ref(null)
 const savedResults = ref({})
-const showImageLightbox = ref(false)
+const lightboxImage = ref(null)
 let revealTimer
 
 const current = computed(() => records[currentIndex.value])
-const currentImage = computed(() => current.value.images[currentImageIndex.value])
-const currentGroup = computed(() => (
-  current.value.groups.find((group) => group.id === activeGroupId.value)
-  || current.value.groups[0]
-))
 const processedCount = computed(() => Object.keys(savedResults.value).length)
 const progress = computed(() => Math.round((processedCount.value / records.length) * 100))
 
-function selectImage(index) {
-  currentImageIndex.value = index
-  showImageLightbox.value = false
-}
-
-function selectGroup(groupId) {
-  activeGroupId.value = groupId
-}
-
-function showEvidence(question) {
+function openEvidence(question) {
   if (question.imageIndex === undefined) return
-  selectImage(question.imageIndex)
+  lightboxImage.value = current.value.images[question.imageIndex]
+}
+
+function closeEvidence() {
+  lightboxImage.value = null
 }
 
 function showRecord(index) {
   if (syncing.value || index < 0 || index >= records.length) return
   currentIndex.value = index
-  currentImageIndex.value = 0
-  activeGroupId.value = 'story'
-  showImageLightbox.value = false
+  lightboxImage.value = null
   result.value = null
   note.value = savedResults.value[records[index].id]?.note || ''
+  document.querySelector('.screening-content')?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function goNext() {
@@ -185,11 +172,10 @@ async function saveDecision(decision) {
   revealTimer = window.setTimeout(async () => {
     if (currentIndex.value < records.length - 1) {
       currentIndex.value += 1
-      currentImageIndex.value = 0
-      activeGroupId.value = 'story'
       note.value = savedResults.value[records[currentIndex.value].id]?.note || ''
-      showImageLightbox.value = false
+      lightboxImage.value = null
       await nextTick()
+      document.querySelector('.screening-content')?.scrollTo({ top: 0 })
       result.value = null
     }
   }, 1500)
@@ -199,10 +185,10 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
 </script>
 
 <template>
-  <main class="screening-page">
+  <main class="screening-page screening-page-vertical">
     <div class="screening-ambient" aria-hidden="true"></div>
 
-    <header class="screening-topbar">
+    <header class="screening-topbar vertical-topbar">
       <div class="screening-brand">
         <div class="brand-orbit" aria-hidden="true"><span>鲲</span></div>
         <div>
@@ -227,135 +213,101 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
       </div>
     </header>
 
-    <section class="screening-stage">
-      <div class="image-panel">
-        <div class="image-panel-head">
-          <div>
-            <span class="section-index">01</span>
-            <div>
-              <small>ORIGINAL SUBMISSION</small>
-              <strong>申请资料原图</strong>
-            </div>
+    <div class="screening-content">
+      <div class="vertical-shell">
+        <section class="applicant-hero">
+          <div class="applicant-number">
+            <span>CURRENT APPLICATION</span>
+            <strong>{{ String(currentIndex + 1).padStart(2, '0') }}</strong>
           </div>
-          <span class="original-badge">原图展示 · 未裁剪</span>
-        </div>
 
-        <div class="image-viewer">
-          <button
-            class="image-canvas"
-            type="button"
-            aria-label="全屏查看原图"
-            @click="showImageLightbox = true"
-          >
-            <span class="image-grid" aria-hidden="true"></span>
-            <img :src="currentImage.src" :alt="currentImage.label" />
-            <span class="zoom-hint">全屏查看原图</span>
-          </button>
-          <div class="image-caption">
-            <span>{{ currentImage.label }}</span>
-            <span>{{ currentImageIndex + 1 }} / {{ current.images.length }}</span>
-          </div>
-        </div>
-
-        <div v-if="current.images.length > 1" class="image-strip" aria-label="原图列表">
-          <button
-            v-for="(image, index) in current.images"
-            :key="image.src"
-            type="button"
-            :class="{ active: currentImageIndex === index }"
-            @click="selectImage(index)"
-          >
-            <img :src="image.src" :alt="image.label" />
-            <span>原图 {{ index + 1 }}</span>
-          </button>
-        </div>
-      </div>
-
-      <aside class="review-panel">
-        <div class="candidate-card">
-          <div class="candidate-title">
-            <div>
-              <span class="section-index">02</span>
-              <small>CURRENT APPLICATION</small>
-            </div>
-            <span class="precheck-badge">已通过初筛</span>
-          </div>
-          <div class="candidate-identity">
+          <div class="applicant-main">
             <div class="candidate-avatar">{{ current.nickname.slice(0, 1) }}</div>
             <div>
+              <span class="precheck-badge">已通过初筛</span>
               <h1>{{ current.nickname }}</h1>
               <p>{{ current.id }} · 提交于 {{ current.submittedAt }}</p>
             </div>
           </div>
-          <div class="record-switcher">
+
+          <div class="vertical-record-switcher">
             <button type="button" :disabled="currentIndex === 0 || syncing" @click="goPrevious">
-              ← 上一位
+              <span>←</span> 上一位
             </button>
-            <span>{{ String(currentIndex + 1).padStart(2, '0') }}</span>
             <button type="button" :disabled="currentIndex === records.length - 1 || syncing" @click="goNext">
-              下一位 →
+              下一位 <span>→</span>
             </button>
           </div>
+        </section>
+
+        <div class="privacy-banner">
+          <span aria-hidden="true">●</span>
+          直播画面已隐藏手机号、微信号、抖音 ID、MAC、ICCID 等敏感字段
         </div>
 
-        <div class="responses-card">
-          <div class="responses-heading">
+        <section
+          v-for="(group, groupIndex) in current.groups"
+          :key="group.id"
+          class="qa-section"
+        >
+          <header class="qa-section-heading">
             <div>
-              <span class="section-index">03</span>
+              <span>0{{ groupIndex + 1 }}</span>
               <div>
-                <small>FORM RESPONSES</small>
-                <strong>表单问答</strong>
+                <small>APPLICATION RESPONSES</small>
+                <h2>{{ group.label }}</h2>
               </div>
             </div>
-            <span>已隐藏手机号、MAC、ICCID 等敏感字段</span>
-          </div>
+            <strong>{{ group.questions.length }} 项回答</strong>
+          </header>
 
-          <nav class="question-groups" aria-label="表单问题分组">
-            <button
-              v-for="group in current.groups"
-              :key="group.id"
-              type="button"
-              :class="{ active: activeGroupId === group.id }"
-              @click="selectGroup(group.id)"
-            >
-              {{ group.label }}
-              <span>{{ group.questions.length }}</span>
-            </button>
-          </nav>
-
-          <ol class="responses-list">
-            <li
-              v-for="item in currentGroup.questions"
+          <div class="qa-stack">
+            <article
+              v-for="item in group.questions"
               :key="item.number"
-              :class="{
-                'is-long': item.long,
-                'has-image': item.imageIndex !== undefined,
-                'is-active': item.imageIndex === currentImageIndex,
-              }"
+              class="qa-entry"
+              :class="{ 'is-story': item.long, 'has-evidence': item.imageIndex !== undefined }"
             >
-              <span class="response-number">Q{{ String(item.number).padStart(2, '0') }}</span>
-              <div>
-                <small>{{ item.question }}</small>
-                <p>{{ item.answer }}</p>
-                <button
-                  v-if="item.imageIndex !== undefined"
-                  class="response-image-link"
-                  type="button"
-                  @click="showEvidence(item)"
-                >
-                  <span aria-hidden="true">▧</span>
-                  {{ item.imageLabel || '查看对应原图' }}
-                  <i>原图 {{ item.imageIndex + 1 }}</i>
-                </button>
+              <div class="qa-copy">
+                <span class="qa-number">Q{{ String(item.number).padStart(2, '0') }}</span>
+                <div>
+                  <h3>{{ item.question }}</h3>
+                  <p>{{ item.answer }}</p>
+                </div>
               </div>
-            </li>
-          </ol>
+
+              <button
+                v-if="item.imageIndex !== undefined"
+                class="inline-evidence"
+                type="button"
+                :aria-label="`全屏查看${current.images[item.imageIndex].label}`"
+                @click="openEvidence(item)"
+              >
+                <img
+                  :src="current.images[item.imageIndex].src"
+                  :alt="current.images[item.imageIndex].label"
+                  loading="lazy"
+                />
+                <span class="evidence-caption">
+                  <span>
+                    <small>ORIGINAL IMAGE</small>
+                    <strong>{{ item.imageLabel || current.images[item.imageIndex].label }}</strong>
+                  </span>
+                  <em>查看原图 ↗</em>
+                </span>
+              </button>
+            </article>
+          </div>
+        </section>
+
+        <div class="content-end">
+          <span>END OF APPLICATION</span>
+          <p>以上为当前申请人的直播展示内容</p>
         </div>
+      </div>
+    </div>
 
-      </aside>
-    </section>
-
-    <footer class="decision-bar">
+    <footer class="decision-bar vertical-decision-bar">
       <button
         class="decision-button decision-reject"
         type="button"
@@ -372,7 +324,7 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
           v-model="note"
           maxlength="120"
           rows="2"
-          placeholder="填写简短审核说明（请勿输入手机号、MAC 等敏感信息）"
+          placeholder="填写简短审核说明"
           :disabled="syncing"
         ></textarea>
         <small>{{ note.length }} / 120</small>
@@ -391,24 +343,22 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
 
     <Transition name="result-reveal">
       <div
-        v-if="showImageLightbox"
+        v-if="lightboxImage"
         class="image-lightbox"
         role="dialog"
         aria-modal="true"
-        :aria-label="currentImage.label"
-        @click.self="showImageLightbox = false"
+        :aria-label="lightboxImage.label"
+        @click.self="closeEvidence"
       >
         <div class="lightbox-head">
           <div>
             <small>ORIGINAL IMAGE</small>
-            <strong>{{ currentImage.label }}</strong>
+            <strong>{{ lightboxImage.label }}</strong>
           </div>
-          <button type="button" aria-label="关闭原图" @click="showImageLightbox = false">
-            ×
-          </button>
+          <button type="button" aria-label="关闭原图" @click="closeEvidence">×</button>
         </div>
-        <img :src="currentImage.src" :alt="currentImage.label" />
-        <p>原图 {{ currentImageIndex + 1 }} / {{ current.images.length }} · 点击空白处关闭</p>
+        <img :src="lightboxImage.src" :alt="lightboxImage.label" />
+        <p>点击空白处关闭</p>
       </div>
     </Transition>
 
