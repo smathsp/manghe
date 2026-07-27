@@ -1780,9 +1780,9 @@ body,
   left: 0;
   display: grid;
   grid-template-columns: 238px minmax(0, 1fr) 238px;
-  align-items: center;
+  align-items: end;
   min-height: 0;
-  padding: 24px 18px;
+  padding: 24px 18px 22px;
   pointer-events: none;
   border: 0;
   background: transparent;
