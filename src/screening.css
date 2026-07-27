@@ -1285,6 +1285,7 @@ body,
   height: 100%;
   min-height: 0;
   object-fit: contain;
+  cursor: zoom-out;
 }
 
 .image-lightbox > p {
@@ -1757,7 +1758,7 @@ body,
 
 /* 两侧直播操作区 */
 .screening-page-vertical {
-  grid-template-rows: 68px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .screening-page-vertical .screening-content {
@@ -1773,7 +1774,7 @@ body,
 .vertical-decision-bar {
   position: fixed;
   z-index: 12;
-  top: 68px;
+  top: 0;
   right: 0;
   bottom: 0;
   left: 0;
@@ -1791,16 +1792,16 @@ body,
 
 .decision-reject-column {
   grid-column: 1;
-  grid-template-rows: 68px 152px;
-  gap: 10px;
+  grid-template-rows: 150px;
+  gap: 0;
   width: 220px;
   min-width: 0;
   pointer-events: auto;
 }
 
 .decision-reject-column .decision-button {
-  min-height: 68px;
-  border-radius: 15px;
+  min-height: 150px;
+  border-radius: 18px;
   background:
     linear-gradient(135deg, rgba(92, 29, 29, .88), rgba(47, 19, 19, .92));
   box-shadow: 0 18px 42px rgba(0,0,0,.28);
@@ -1880,10 +1881,10 @@ body,
   }
 
   .decision-reject-column {
-    grid-template-rows: 64px 142px;
+    grid-template-rows: 142px;
   }
 
-  .decision-reject-column .note-field {
+  .decision-reject-column .decision-button {
     min-height: 142px;
   }
 

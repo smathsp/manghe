@@ -111,7 +111,6 @@ const records = [
 ]
 
 const currentIndex = ref(0)
-const note = ref('')
 const syncing = ref(false)
 const result = ref(null)
 const savedResults = ref({})
@@ -119,8 +118,6 @@ const lightboxImage = ref(null)
 let revealTimer
 
 const current = computed(() => records[currentIndex.value])
-const processedCount = computed(() => Object.keys(savedResults.value).length)
-const progress = computed(() => Math.round((processedCount.value / records.length) * 100))
 
 function openEvidence(question) {
   if (question.imageIndex === undefined) return
@@ -136,7 +133,6 @@ function showRecord(index) {
   currentIndex.value = index
   lightboxImage.value = null
   result.value = null
-  note.value = savedResults.value[records[index].id]?.note || ''
   document.querySelector('.screening-content')?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -162,7 +158,7 @@ async function saveDecision(decision) {
     [current.value.id]: {
       result: decision,
       time: new Date().toISOString(),
-      note: note.value.trim(),
+      note: '',
     },
   }
   syncing.value = false
@@ -172,7 +168,6 @@ async function saveDecision(decision) {
   revealTimer = window.setTimeout(async () => {
     if (currentIndex.value < records.length - 1) {
       currentIndex.value += 1
-      note.value = savedResults.value[records[currentIndex.value].id]?.note || ''
       lightboxImage.value = null
       await nextTick()
       document.querySelector('.screening-content')?.scrollTo({ top: 0 })
@@ -187,31 +182,6 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
 <template>
   <main class="screening-page screening-page-vertical">
     <div class="screening-ambient" aria-hidden="true"></div>
-
-    <header class="screening-topbar vertical-topbar">
-      <div class="screening-brand">
-        <div class="brand-orbit" aria-hidden="true"><span>鲲</span></div>
-        <div>
-          <strong>天火卡直播筛选</strong>
-          <small>KUNPENG · LIVE SCREENING</small>
-        </div>
-      </div>
-
-      <div class="live-indicator">
-        <i aria-hidden="true"></i>
-        直播筛选中
-      </div>
-
-      <div class="screening-progress">
-        <div>
-          <span>本场进度</span>
-          <strong>{{ processedCount }} <small>/ {{ records.length }}</small></strong>
-        </div>
-        <div class="progress-track" aria-hidden="true">
-          <span :style="{ width: `${progress}%` }"></span>
-        </div>
-      </div>
-    </header>
 
     <div class="screening-content">
       <div class="vertical-shell">
@@ -318,18 +288,6 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
           <span>×</span>
           <div><strong>不通过</strong><small>REJECT</small></div>
         </button>
-
-        <label class="note-field">
-          <span>直播筛选备注</span>
-          <textarea
-            v-model="note"
-            maxlength="120"
-            rows="2"
-            placeholder="填写不通过原因或其他审核说明"
-            :disabled="syncing"
-          ></textarea>
-          <small>{{ note.length }} / 120</small>
-        </label>
       </div>
 
       <button
@@ -359,8 +317,13 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
           </div>
           <button type="button" aria-label="关闭原图" @click="closeEvidence">×</button>
         </div>
-        <img :src="lightboxImage.src" :alt="lightboxImage.label" />
-        <p>点击空白处关闭</p>
+        <img
+          :src="lightboxImage.src"
+          :alt="lightboxImage.label"
+          title="再次点击关闭原图"
+          @click="closeEvidence"
+        />
+        <p>再次点击图片关闭</p>
       </div>
     </Transition>
 
