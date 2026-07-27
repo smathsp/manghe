@@ -308,27 +308,29 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
     </div>
 
     <footer class="decision-bar vertical-decision-bar">
-      <button
-        class="decision-button decision-reject"
-        type="button"
-        :disabled="syncing"
-        @click="saveDecision('不通过')"
-      >
-        <span>×</span>
-        <div><strong>不通过</strong><small>REJECT</small></div>
-      </button>
-
-      <label class="note-field">
-        <span>直播筛选备注</span>
-        <textarea
-          v-model="note"
-          maxlength="120"
-          rows="2"
-          placeholder="填写简短审核说明"
+      <div class="decision-reject-column">
+        <button
+          class="decision-button decision-reject"
+          type="button"
           :disabled="syncing"
-        ></textarea>
-        <small>{{ note.length }} / 120</small>
-      </label>
+          @click="saveDecision('不通过')"
+        >
+          <span>×</span>
+          <div><strong>不通过</strong><small>REJECT</small></div>
+        </button>
+
+        <label class="note-field">
+          <span>直播筛选备注</span>
+          <textarea
+            v-model="note"
+            maxlength="120"
+            rows="2"
+            placeholder="填写不通过原因或其他审核说明"
+            :disabled="syncing"
+          ></textarea>
+          <small>{{ note.length }} / 120</small>
+        </label>
+      </div>
 
       <button
         class="decision-button decision-pass"
