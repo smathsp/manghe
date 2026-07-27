@@ -223,14 +223,14 @@ button {
 }
 
 .image-panel-head,
-.checks-heading {
+.responses-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .image-panel-head > div,
-.checks-heading > div {
+.responses-heading > div {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -410,9 +410,24 @@ button {
   border-bottom: 1px solid var(--screening-line);
 }
 
+.candidate-title > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .candidate-title span {
   color: #9caea5;
   font-size: 11px;
+}
+
+.candidate-title .precheck-badge {
+  padding: 6px 9px;
+  border-radius: 6px;
+  color: #8ce5af;
+  background: var(--screening-green-soft);
+  font-size: 9px;
+  letter-spacing: .08em;
 }
 
 .candidate-identity {
@@ -482,105 +497,95 @@ button {
   font-size: 14px;
 }
 
-.checks-card {
+.responses-card {
   min-height: 0;
   padding: 16px 18px;
+  overflow: hidden;
 }
 
-.checks-heading {
+.responses-heading {
   padding-bottom: 13px;
   border-bottom: 1px solid var(--screening-line);
 }
 
-.checks-heading strong {
+.responses-heading > div > div small,
+.responses-heading > div > div strong {
+  display: block;
+}
+
+.responses-heading > div > div small {
+  color: #60766b;
+  font-size: 8px;
+  letter-spacing: .18em;
+}
+
+.responses-heading strong {
+  margin-top: 3px;
   font-size: 14px;
   letter-spacing: .08em;
 }
 
-.checks-ready,
-.checks-review {
-  padding: 6px 9px;
-  border-radius: 6px;
+.responses-heading > span {
+  color: #6f857a;
   font-size: 9px;
   letter-spacing: .08em;
 }
 
-.checks-ready {
-  color: #8ce5af;
-  background: var(--screening-green-soft);
-}
-
-.checks-review {
-  color: #ff9f9f;
-  background: var(--screening-red-soft);
-}
-
-.checks-list {
+.responses-list {
   display: grid;
   gap: 8px;
   margin: 13px 0 0;
   padding: 0;
   list-style: none;
+  max-height: calc(100% - 50px);
+  overflow: auto;
+  scrollbar-color: rgba(109, 139, 123, .28) transparent;
+  scrollbar-width: thin;
 }
 
-.checks-list li {
+.responses-list li {
   display: grid;
-  grid-template-columns: 30px 1fr 26px;
-  align-items: center;
-  min-height: 58px;
-  padding: 8px 10px;
+  grid-template-columns: 32px 1fr;
+  align-items: start;
+  min-height: 60px;
+  padding: 11px 12px;
   border: 1px solid rgba(197, 225, 210, .09);
   border-radius: 10px;
-  background: rgba(255,255,255,.018);
+  background:
+    linear-gradient(90deg, rgba(85, 216, 139, .045), transparent 45%),
+    rgba(255,255,255,.018);
 }
 
-.checks-list li.is-fail {
-  border-color: rgba(255, 105, 105, .25);
-  background: rgba(255, 105, 105, .055);
+.responses-list li.is-long {
+  border-color: rgba(229, 200, 120, .16);
+  background:
+    linear-gradient(135deg, rgba(229, 200, 120, .07), transparent 60%),
+    rgba(255,255,255,.018);
 }
 
-.check-number {
+.response-number {
+  padding-top: 2px;
   color: #566b60;
   font-family: "Times New Roman", serif;
   font-size: 9px;
 }
 
-.checks-list strong,
-.checks-list small {
+.responses-list small,
+.responses-list p {
   display: block;
 }
 
-.checks-list strong {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.checks-list small {
-  margin-top: 3px;
+.responses-list small {
   color: #6d8177;
   font-size: 9px;
+  line-height: 1.5;
 }
 
-.checks-list i {
-  display: grid;
-  width: 23px;
-  height: 23px;
-  place-items: center;
-  justify-self: end;
-  border-radius: 50%;
-  font-size: 11px;
-  font-style: normal;
-}
-
-.is-pass .checks-list i,
-.checks-list .is-pass i {
-  color: #73e19d;
-  background: var(--screening-green-soft);
-}
-
-.checks-list .is-fail i {
-  color: #ff8989;
-  background: var(--screening-red-soft);
+.responses-list p {
+  margin: 5px 0 0;
+  color: #e1ece6;
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .summary-card {
@@ -900,12 +905,14 @@ button {
     padding-bottom: 12px;
   }
 
-  .checks-list {
+  .responses-list {
     gap: 6px;
   }
 
-  .checks-list li {
-    min-height: 50px;
+  .responses-list li {
+    min-height: 52px;
+    padding-top: 9px;
+    padding-bottom: 9px;
   }
 
   .decision-bar {

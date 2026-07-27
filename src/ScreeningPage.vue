@@ -11,11 +11,15 @@ const records = [
       { src: '/images/C5800-688.png', label: '设备正面原图' },
       { src: '/images/C5800-688-result.png', label: '设备背面原图' },
     ],
-    checks: [
-      { label: '有鲲鹏 CPE', detail: '资料已确认', state: 'pass' },
-      { label: '手机号有效', detail: '大陆 11 位号码', state: 'pass' },
-      { label: 'MAC 可识别', detail: '格式校验通过', state: 'pass' },
-      { label: '资料无重复', detail: '手机号与 MAC 均唯一', state: 'pass' },
+    questions: [
+      { question: '你是否有鲲鹏 5G CPE 产品？', answer: '是' },
+      { question: '你目前使用的 CPE 型号是？', answer: '鲲鹏 C5800-688' },
+      { question: '你使用鲲鹏 CPE 多久了？', answer: '1 年以上' },
+      {
+        question: '请分享你与鲲鹏 CPE 的故事',
+        answer: '第一次接触鲲鹏是在一次户外直播中，稳定的网络让我顺利完成了整场直播。后来也把它带去过很多地方，它已经成为我出门时一定会带上的设备。',
+        long: true,
+      },
     ],
   },
   {
@@ -26,11 +30,15 @@ const records = [
       { src: '/images/C2000PRO+.png', label: '设备原图' },
       { src: '/images/AK68-798.png', label: '补充资料原图' },
     ],
-    checks: [
-      { label: '有鲲鹏 CPE', detail: '资料已确认', state: 'pass' },
-      { label: '手机号有效', detail: '大陆 11 位号码', state: 'pass' },
-      { label: 'MAC 可识别', detail: '未识别到有效 MAC', state: 'fail' },
-      { label: '资料无重复', detail: '手机号与 MAC 均唯一', state: 'pass' },
+    questions: [
+      { question: '你是否有鲲鹏 5G CPE 产品？', answer: '是' },
+      { question: '你目前使用的 CPE 型号是？', answer: '鲲鹏 C2000 Pro+' },
+      { question: '你通常在什么场景使用 CPE？', answer: '户外直播、房车旅行' },
+      {
+        question: '请分享你与鲲鹏 CPE 的故事',
+        answer: '它陪我走过不少城市。最深刻的一次是在山里临时开播，手机信号不稳定，但 CPE 让画面一直保持流畅。',
+        long: true,
+      },
     ],
   },
   {
@@ -42,11 +50,15 @@ const records = [
       { src: '/images/NBCPE-688.png', label: '设备铭牌原图' },
       { src: '/images/AM5.png', label: '补充资料原图' },
     ],
-    checks: [
-      { label: '有鲲鹏 CPE', detail: '资料已确认', state: 'pass' },
-      { label: '手机号有效', detail: '大陆 11 位号码', state: 'pass' },
-      { label: 'MAC 可识别', detail: '格式校验通过', state: 'pass' },
-      { label: '资料无重复', detail: '检测到重复资料', state: 'fail' },
+    questions: [
+      { question: '你是否有鲲鹏 5G CPE 产品？', answer: '是' },
+      { question: '你目前使用的 CPE 型号是？', answer: '鲲鹏 N6800' },
+      { question: '你最看重 CPE 的哪一点？', answer: '稳定性和便携性' },
+      {
+        question: '请分享你与鲲鹏 CPE 的故事',
+        answer: '从日常备用网络到现在的直播主力设备，它带给我的不仅是稳定连接，也让我能更自由地选择工作和生活的地点。',
+        long: true,
+      },
     ],
   },
 ]
@@ -62,7 +74,6 @@ let revealTimer
 
 const current = computed(() => records[currentIndex.value])
 const currentImage = computed(() => current.value.images[currentImageIndex.value])
-const allChecksPassed = computed(() => current.value.checks.every((item) => item.state === 'pass'))
 const processedCount = computed(() => Object.keys(savedResults.value).length)
 const passedCount = computed(() => Object.values(savedResults.value).filter((item) => item.result === '通过').length)
 const failedCount = computed(() => processedCount.value - passedCount.value)
@@ -201,10 +212,12 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
 
       <aside class="review-panel">
         <div class="candidate-card">
-          <span class="section-index">02</span>
           <div class="candidate-title">
-            <small>CURRENT APPLICATION</small>
-            <span>当前申请</span>
+            <div>
+              <span class="section-index">02</span>
+              <small>CURRENT APPLICATION</small>
+            </div>
+            <span class="precheck-badge">已通过初筛</span>
           </div>
           <div class="candidate-identity">
             <div class="candidate-avatar">{{ current.nickname.slice(0, 1) }}</div>
@@ -224,31 +237,31 @@ onBeforeUnmount(() => window.clearTimeout(revealTimer))
           </div>
         </div>
 
-        <div class="checks-card">
-          <div class="checks-heading">
+        <div class="responses-card">
+          <div class="responses-heading">
             <div>
               <span class="section-index">03</span>
-              <strong>技术核验</strong>
+              <div>
+                <small>FORM RESPONSES</small>
+                <strong>表单问答</strong>
+              </div>
             </div>
-            <span :class="allChecksPassed ? 'checks-ready' : 'checks-review'">
-              {{ allChecksPassed ? '全部符合' : '存在异常' }}
-            </span>
+            <span>{{ current.questions.length }} 项内容</span>
           </div>
 
-          <ul class="checks-list">
+          <ol class="responses-list">
             <li
-              v-for="(item, index) in current.checks"
-              :key="item.label"
-              :class="`is-${item.state}`"
+              v-for="(item, index) in current.questions"
+              :key="item.question"
+              :class="{ 'is-long': item.long }"
             >
-              <span class="check-number">0{{ index + 1 }}</span>
+              <span class="response-number">{{ String(index + 1).padStart(2, '0') }}</span>
               <div>
-                <strong>{{ item.label }}</strong>
-                <small>{{ item.detail }}</small>
+                <small>{{ item.question }}</small>
+                <p>{{ item.answer }}</p>
               </div>
-              <i aria-hidden="true">{{ item.state === 'pass' ? '✓' : '!' }}</i>
             </li>
-          </ul>
+          </ol>
         </div>
 
         <div class="summary-card">
