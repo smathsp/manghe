@@ -7,6 +7,7 @@ import First50Page from './First50Page.vue'
 import ThanksPage from './ThanksPage.vue'
 import MailboxPage from './MailboxPage.vue'
 import VoidBoxPage from './VoidBoxPage.vue'
+import ScreeningPage from './ScreeningPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -24,8 +25,12 @@ const isMailboxDomainRoot = window.location.hostname === 'zd.smathsp.com'
 const isMailboxPage = isMailboxDomainRoot
   || normalizedPath === '/mail'
   || normalizedPath.endsWith('/mail/index.html')
+const isScreeningPage = normalizedPath === '/screening'
+  || normalizedPath.endsWith('/screening/index.html')
 
-const RootComponent = isMailboxPage
+const RootComponent = isScreeningPage
+  ? ScreeningPage
+  : isMailboxPage
   ? MailboxPage
   : isVoidBoxPage
     ? VoidBoxPage
@@ -84,6 +89,14 @@ if (RootComponent === First50Page) {
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
     '天火卡首批 50 人入选名单。',
+  )
+}
+
+if (RootComponent === ScreeningPage) {
+  document.title = '鲲鹏 CPE｜直播初筛'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '鲲鹏 CPE 直播初筛操作页面，展示申请原图并实时同步筛选结果。',
   )
 }
 

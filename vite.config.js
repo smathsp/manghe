@@ -14,6 +14,7 @@ export default defineConfig({
         thanks: 'thanks/index.html',
         voidBox: 'void-box/index.html',
         mail: 'mail/index.html',
+        screening: 'screening/index.html',
       },
     },
   },
