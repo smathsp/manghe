@@ -1,123 +1,365 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import JSZip from 'jszip'
+import Papa from 'papaparse'
 import './screening.css'
 
-function buildQuestionGroups({
-  model,
-  publicTest,
-  activity,
-  reason,
-  message,
-}) {
-  return [
-    {
-      id: 'device',
-      label: '设备经历',
-      questions: [
-        { number: 5, question: '你是否用过 5G 随身 WiFi / CPE 产品？', shortLabel: '使用过 5G CPE', answer: '是', compact: true },
-        { number: 6, question: '你是否有鲲鹏 5G CPE 产品？', shortLabel: '拥有鲲鹏 5G CPE', answer: '是', compact: true },
-        { number: 7, question: '你用过谁家的 5G 产品？', shortLabel: '使用过的 5G 品牌', answer: '鲲鹏、华为', compact: true },
-        { number: 9, question: '你有鲲鹏的哪些 5G CPE 产品？', answer: model, imageIndex: 0 },
-        { number: 11, question: '你是否用过鲲鹏的流量卡？', shortLabel: '使用过鲲鹏流量卡', answer: '是', compact: true },
-      ],
-    },
-    {
-      id: 'contribution',
-      label: '参与贡献',
-      questions: [
-        { number: 13, question: '你是否参加过鲲鹏产品的内测或公测活动？', shortLabel: '参加内测或公测', answer: '是', compact: true },
-        { number: 14, question: '你参加过哪些鲲鹏产品的内测或公测活动？', answer: publicTest },
-        { number: 15, question: '你参加过鲲鹏产品的种草活动？', shortLabel: '参加产品种草活动', answer: '是', compact: true, imageIndex: 1, imageLabel: '发布作品截图', evidenceNumber: 16, evidenceQuestion: '请提供你发布作品的截图' },
-        { number: 17, question: '你是否给鲲鹏团队反馈过问题帮助优化产品？', shortLabel: '反馈问题帮助优化', answer: '是', compact: true, imageIndex: 2, imageLabel: '问题反馈沟通截图', evidenceNumber: 18, evidenceQuestion: '请提供和鲲鹏团队反馈问题的沟通截图' },
-        { number: 19, question: '你是否给身边的朋友推荐过鲲鹏的产品？', shortLabel: '向朋友推荐产品', answer: '是', compact: true, imageIndex: 3, imageLabel: '推荐证明截图', evidenceNumber: 20, evidenceQuestion: '请提供推荐鲲鹏产品的证明截图' },
-        { number: 21, question: '你是否在其他媒体渠道发布过鲲鹏产品的开箱内容？', shortLabel: '发布过产品开箱', answer: '是', detail: activity, compact: true, imageIndex: 4, imageLabel: '开箱内容截图', evidenceNumber: 22, evidenceQuestion: '请提供开箱内容的证明截图' },
-      ],
-    },
-    {
-      id: 'fan',
-      label: '粉丝互动',
-      questions: [
-        { number: 23, question: '你是否观看鲲鹏张导抖音的直播？', shortLabel: '观看鲲鹏张导直播', answer: '是', compact: true, imageIndex: 5, imageLabel: '鲲鹏张导粉丝灯牌截图', evidenceNumber: 24, evidenceQuestion: '请提供观看粉丝灯牌截图' },
-        { number: 25, question: '你是否观看张导严选抖音号的直播？', shortLabel: '观看张导严选直播', answer: '是', compact: true, imageIndex: 6, imageLabel: '张导严选粉丝灯牌截图', evidenceNumber: 26, evidenceQuestion: '请提供观看粉丝灯牌截图' },
-        { number: 27, question: '你是否有注册张导严选小店？', shortLabel: '注册张导严选小店', answer: '是', compact: true, imageIndex: 7, imageLabel: '张导的店会员等级截图', evidenceNumber: 29, evidenceQuestion: '请提供张导的店会员等级截图' },
-      ],
-    },
-    {
-      id: 'story',
-      label: '申请表达',
-      questions: [
-        { number: 30, question: '你为什么需要天火卡？', answer: reason, long: true },
-        { number: 31, question: '留下你想对张导说的话', answer: message, long: true },
-      ],
-    },
-  ]
+const ATTACHMENT_FIELDS = [
+  '你参加过哪些鲲鹏产品的内测或公测活动？ 2',
+  '请提供你发布作品的截图',
+  '请提供和鲲鹏团队反馈问题的沟通截图',
+  '请提供证明截图',
+  '请提供证明截图 2',
+  '请提供观看粉丝灯牌截图',
+  '请提供观看粉丝灯牌截图 2',
+  '请提供张导的店会员等级截图',
+]
+
+const GROUPS = [
+  {
+    id: 'device',
+    label: '设备经历',
+    questions: [
+      {
+        number: 5,
+        question: '你是否用过 5G 随身 WiFi / CPE 产品？',
+        shortLabel: '使用过 5G CPE',
+        fields: ['你是否用过5G 随身WiFi/CPE产品?'],
+        compact: true,
+      },
+      {
+        number: 6,
+        question: '你是否有鲲鹏 5G CPE 产品？',
+        shortLabel: '拥有鲲鹏 5G CPE',
+        fields: ['你是否有鲲鹏5G CPE产品？ 3'],
+        compact: true,
+      },
+      {
+        number: 7,
+        question: '你用过谁家的 5G 产品？',
+        shortLabel: '使用过的 5G 品牌',
+        fields: ['你用过谁家的5G产品？'],
+        compact: true,
+      },
+      {
+        number: 8,
+        question: '没有鲲鹏 5G CPE，为什么申请天火卡？不能用怎么办？',
+        fields: [
+          '你没有鲲鹏5G CPE，为什么要申请天火卡，不能用怎么办？',
+          '你有鲲鹏的哪些5G CPE产品？-否，为什么要申请天火卡？不能用怎么办？-补充内容',
+          '是否有鲲鹏5G CPE产品？-其他-补充内容',
+        ],
+      },
+      {
+        number: 9,
+        question: '你有鲲鹏的哪些 5G CPE 产品？',
+        fields: ['你有鲲鹏的哪些5G CPE产品？ 2'],
+        detailFields: ['请列出CPE产品，并且提供每个产品的MAC地址'],
+        detailLabel: 'CPE 产品资料（MAC 已隐藏）',
+      },
+      {
+        number: 11,
+        question: '你是否用过鲲鹏的流量卡？',
+        shortLabel: '使用过鲲鹏流量卡',
+        fields: ['你是否用过鲲鹏的流量卡？'],
+        compact: true,
+      },
+    ],
+  },
+  {
+    id: 'contribution',
+    label: '参与贡献',
+    questions: [
+      {
+        number: 13,
+        question: '你是否参加过鲲鹏产品的内测或公测活动？',
+        shortLabel: '参加内测或公测',
+        fields: ['你是否参加过鲲鹏产品的内测或公测活动？'],
+        compact: true,
+        evidence: {
+          number: 14,
+          field: '你参加过哪些鲲鹏产品的内测或公测活动？ 2',
+          question: '请提供参加内测或公测活动的资料',
+        },
+      },
+      {
+        number: 15,
+        question: '你参加过鲲鹏产品的种草活动？',
+        shortLabel: '参加产品种草活动',
+        fields: ['你参加过鲲鹏产品的种草活动？ 2'],
+        compact: true,
+        evidence: {
+          number: 16,
+          field: '请提供你发布作品的截图',
+          question: '请提供你发布作品的截图',
+        },
+      },
+      {
+        number: 17,
+        question: '你是否给鲲鹏团队反馈过问题，帮助优化产品？',
+        shortLabel: '反馈问题帮助优化',
+        fields: ['你是否给鲲鹏团队反馈过问题帮助优化产品？ 2'],
+        compact: true,
+        evidence: {
+          number: 18,
+          field: '请提供和鲲鹏团队反馈问题的沟通截图',
+          question: '请提供和鲲鹏团队反馈问题的沟通截图',
+        },
+      },
+      {
+        number: 19,
+        question: '你是否给身边的朋友推荐过鲲鹏的产品？',
+        shortLabel: '向朋友推荐产品',
+        fields: ['你是否给身边的朋友推荐过鲲鹏的产品？ 2'],
+        compact: true,
+        evidence: {
+          number: 20,
+          field: '请提供证明截图',
+          question: '请提供推荐鲲鹏产品的证明截图',
+        },
+      },
+      {
+        number: 21,
+        question: '你是否在其他媒体渠道发布过鲲鹏产品的开箱内容？',
+        shortLabel: '发布过产品开箱',
+        fields: ['你是否在其他媒体渠道发布过鲲鹏产品的开箱内容？'],
+        compact: true,
+        evidence: {
+          number: 22,
+          field: '请提供证明截图 2',
+          question: '请提供开箱内容的证明截图',
+        },
+      },
+    ],
+  },
+  {
+    id: 'fan',
+    label: '粉丝互动',
+    questions: [
+      {
+        number: 23,
+        question: '你是否观看鲲鹏张导抖音的直播？',
+        shortLabel: '观看鲲鹏张导直播',
+        fields: ['你是否观看鲲鹏张导抖音的直播？'],
+        compact: true,
+        evidence: {
+          number: 24,
+          field: '请提供观看粉丝灯牌截图',
+          question: '请提供鲲鹏张导粉丝灯牌截图',
+        },
+      },
+      {
+        number: 25,
+        question: '你是否观看张导严选抖音号的直播？',
+        shortLabel: '观看张导严选直播',
+        fields: ['你是否观看张导严选抖音号的直播？'],
+        compact: true,
+        evidence: {
+          number: 26,
+          field: '请提供观看粉丝灯牌截图 2',
+          question: '请提供张导严选粉丝灯牌截图',
+        },
+      },
+      {
+        number: 27,
+        question: '你是否有注册张导严选小店？',
+        shortLabel: '注册张导严选小店',
+        fields: ['你是否有注册张导严选小店'],
+        compact: true,
+        evidence: {
+          number: 29,
+          field: '请提供张导的店会员等级截图',
+          question: '请提供张导的店会员等级截图',
+        },
+      },
+    ],
+  },
+  {
+    id: 'story',
+    label: '申请表达',
+    questions: [
+      {
+        number: 30,
+        question: '你为什么需要天火卡？',
+        fields: ['你为什么需要天火卡？'],
+        long: true,
+      },
+      {
+        number: 31,
+        question: '留下你想对张导说的话',
+        fields: ['留下你想对张导说的话'],
+        long: true,
+      },
+    ],
+  },
+]
+
+const bundleInput = ref(null)
+const csvInput = ref(null)
+const csvFile = ref(null)
+const zipFile = ref(null)
+const needsSeparateCsv = ref(false)
+const importState = ref('idle')
+const importMessage = ref('')
+const records = ref([])
+const currentIndex = ref(0)
+const zipArchive = ref(null)
+const attachmentIndex = ref(new Map())
+const currentImages = ref(new Map())
+const imageLoading = ref(false)
+const lightboxImage = ref(null)
+const decisions = ref({})
+const revealResult = ref(null)
+const batchStorageKey = ref('')
+const validation = ref({ attachments: 0, missing: 0, multiple: 0 })
+let decisionTimer
+let imageLoadToken = 0
+let objectUrls = []
+
+const current = computed(() => records.value[currentIndex.value] || null)
+const reviewedCount = computed(() => Object.keys(decisions.value).length)
+const progressPercent = computed(() => (
+  records.value.length ? Math.round((reviewedCount.value / records.value.length) * 100) : 0
+))
+const currentDecision = computed(() => (
+  current.value ? decisions.value[current.value.id] : null
+))
+
+function normalizeText(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').trim()
 }
 
-const sharedEvidence = [
-  { src: '/images/C5800-688.png', label: 'Q09 · 鲲鹏 CPE 产品原图' },
-  { src: '/images/C5800-688-result.png', label: 'Q16 · 发布作品截图' },
-  { src: '/activation/figure-01.jpg', label: 'Q18 · 问题反馈沟通截图' },
-  { src: '/activation/figure-04.jpg', label: 'Q20 · 推荐证明截图' },
-  { src: '/activation/figure-05.jpg', label: 'Q22 · 开箱内容截图' },
-  { src: '/activation/figure-08.jpg', label: 'Q24 · 鲲鹏张导粉丝灯牌截图' },
-  { src: '/activation/figure-09.jpg', label: 'Q26 · 张导严选粉丝灯牌截图' },
-  { src: '/activation/figure-10.jpg', label: 'Q29 · 张导的店会员等级截图' },
-]
+function redactSensitive(value) {
+  return normalizeText(value)
+    .replace(/\b1[3-9]\d{9}\b/g, '[手机号已隐藏]')
+    .replace(/\b(?:[0-9a-f]{2}[:-]?){5}[0-9a-f]{2}\b/gi, '[MAC 已隐藏]')
+    .replace(/\b89\d{15,20}\b/g, '[ICCID 已隐藏]')
+    .replace(/\bwxid_[a-z0-9_]+\b/gi, '[微信号已隐藏]')
+}
 
-const records = [
-  {
-    id: 'KP-2026-0047',
-    nickname: '山海之间',
-    submittedAt: '07-27 10:42',
-    images: sharedEvidence,
-    groups: buildQuestionGroups({
-      model: 'C5800-688、C2000MAX',
-      publicTest: 'C5800-688 公测、AK68-798 内测',
-      activity: '发布过 3 条鲲鹏产品开箱内容',
-      reason: '平时经常进行户外直播，现有流量套餐不够稳定，希望天火卡能成为直播时的主力网络。',
-      message: '感谢张导和团队这些年持续听取用户意见。希望鲲鹏越做越好，也祝十周年活动顺利！',
-    }),
-  },
-  {
-    id: 'KP-2026-0048',
-    nickname: '小满',
-    submittedAt: '07-27 10:45',
-    images: sharedEvidence.map((image, index) => index === 0
-      ? { src: '/images/C2000PRO+.png', label: 'Q09 · 鲲鹏 CPE 产品原图' }
-      : image),
-    groups: buildQuestionGroups({
-      model: 'C2000PRO+、AK68-798',
-      publicTest: 'C2000 系列公测、鲲鹏流量卡体验活动',
-      activity: '在抖音和小红书发布过开箱与测速内容',
-      reason: '需要在房车旅行和户外工作时保持稳定连接，天火卡的大流量和高上行很适合我的使用场景。',
-      message: '从第一台鲲鹏设备开始一直用到现在，谢谢团队认真对待每一次反馈。',
-    }),
-  },
-  {
-    id: 'KP-2026-0049',
-    nickname: '白昼星河',
-    submittedAt: '07-27 10:51',
-    images: sharedEvidence.map((image, index) => index === 0
-      ? { src: '/images/NBCPE-688.png', label: 'Q09 · 鲲鹏 CPE 产品原图' }
-      : image),
-    groups: buildQuestionGroups({
-      model: 'NBCPE-688、C8-788',
-      publicTest: 'NBCPE-688 内测、C8-788 公测',
-      activity: '长期分享设备使用技巧和不同场景的网络表现',
-      reason: '有电竞直播和远程工作的需求，希望获得稳定的大流量网络，减少直播中断和延迟。',
-      message: '十年很不容易，感谢张导一直坚持做真正解决用户问题的产品，期待下一个十年。',
-    }),
-  },
-]
+function getWechatNickname(value) {
+  const text = normalizeText(value)
+  if (!text) return ''
 
-const currentIndex = ref(0)
-const syncing = ref(false)
-const result = ref(null)
-const savedResults = ref({})
-const lightboxImage = ref(null)
-let revealTimer
+  const nicknameLine = text
+    .split('\n')
+    .find((line) => /昵称[：:]/.test(line))
 
-const current = computed(() => records[currentIndex.value])
+  if (nicknameLine) {
+    return redactSensitive(nicknameLine.replace(/^.*?昵称[：:]\s*/, ''))
+  }
+
+  if (/wxid_|微信号[：:]|\b1[3-9]\d{9}\b/i.test(text)) return ''
+  return redactSensitive(text)
+}
+
+function readFields(row, fields = []) {
+  const values = fields
+    .map((field) => redactSensitive(row[field]))
+    .filter(Boolean)
+
+  return [...new Set(values)].join('\n')
+}
+
+function buildQuestion(row, config) {
+  return {
+    ...config,
+    answer: readFields(row, config.fields) || '未填写',
+    detail: readFields(row, config.detailFields),
+  }
+}
+
+function buildRecord(row, index) {
+  const id = normalizeText(row['编号']) || String(index + 1)
+  const douyinNickname = redactSensitive(row['你的抖音昵称'])
+  const wechatNickname = getWechatNickname(row['你的微信号【微信昵称】'])
+
+  return {
+    id,
+    nickname: douyinNickname || wechatNickname || `申请人 ${id}`,
+    wechatNickname,
+    submittedAt: normalizeText(row['提交时间']) || '时间未知',
+    groups: GROUPS.map((group) => ({
+      ...group,
+      questions: group.questions.map((question) => buildQuestion(row, question)),
+    })),
+    row,
+  }
+}
+
+function parseCsv(source) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(source, {
+      header: true,
+      skipEmptyLines: 'greedy',
+      complete: ({ data, errors, meta }) => {
+        const fatalErrors = errors.filter((error) => error.type === 'Quotes')
+        if (fatalErrors.length) {
+          reject(new Error(`CSV 格式错误：${fatalErrors[0].message}`))
+          return
+        }
+        resolve({ data, fields: meta.fields || [] })
+      },
+      error: reject,
+    })
+  })
+}
+
+function parseAttachmentEntry(path) {
+  const normalized = path.replace(/\\/g, '/')
+  if (
+    normalized.endsWith('/')
+    || normalized.startsWith('__MACOSX/')
+    || normalized.split('/').some((part) => part.startsWith('.'))
+  ) return null
+
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length < 2) return null
+
+  const field = parts.at(-2)
+  const filename = parts.at(-1)
+  const match = filename.match(/^(.+?)(?:\((\d+)\))?\.(jpe?g|png|webp|gif|bmp)$/i)
+  if (!match || !ATTACHMENT_FIELDS.includes(field)) return null
+
+  return {
+    field,
+    id: match[1],
+    order: Number(match[2] || 0),
+    filename,
+    path: normalized,
+  }
+}
+
+function buildAttachmentIndex(zip) {
+  const index = new Map()
+
+  Object.keys(zip.files).forEach((path) => {
+    const parsed = parseAttachmentEntry(path)
+    if (!parsed) return
+
+    if (!index.has(parsed.field)) index.set(parsed.field, new Map())
+    const fieldRows = index.get(parsed.field)
+    if (!fieldRows.has(parsed.id)) fieldRows.set(parsed.id, [])
+    fieldRows.get(parsed.id).push(parsed)
+  })
+
+  index.forEach((fieldRows) => {
+    fieldRows.forEach((entries) => {
+      entries.sort((a, b) => a.order - b.order || a.filename.localeCompare(b.filename, 'zh-CN'))
+    })
+  })
+
+  return index
+}
+
+function attachmentEntries(field, id) {
+  return attachmentIndex.value.get(field)?.get(String(id)) || []
+}
+
+function questionImages(question) {
+  if (!question.evidence) return []
+  return currentImages.value.get(question.evidence.field) || []
+}
 
 function compactQuestions(group) {
   return group.questions.filter((question) => question.compact)
@@ -128,289 +370,526 @@ function detailQuestions(group) {
 }
 
 function evidenceQuestions(group) {
-  return group.questions.filter((question) => (
-    question.compact && question.imageIndex !== undefined
-  ))
+  return group.questions.filter((question) => question.evidence)
 }
 
-function openEvidence(question) {
-  if (question.imageIndex === undefined) return
-  lightboxImage.value = current.value.images[question.imageIndex]
+function revokeObjectUrls() {
+  objectUrls.forEach((url) => URL.revokeObjectURL(url))
+  objectUrls = []
 }
 
-function closeEvidence() {
-  lightboxImage.value = null
+async function loadCurrentImages() {
+  const record = current.value
+  if (!record || !zipArchive.value) {
+    currentImages.value = new Map()
+    return
+  }
+
+  const token = ++imageLoadToken
+  imageLoading.value = true
+  revokeObjectUrls()
+
+  const imageMap = new Map()
+  for (const field of ATTACHMENT_FIELDS) {
+    const entries = attachmentEntries(field, record.id)
+    const images = []
+
+    for (const entry of entries) {
+      const zipEntry = zipArchive.value.file(entry.path)
+      if (!zipEntry) continue
+      const blob = await zipEntry.async('blob')
+      if (token !== imageLoadToken) return
+
+      const url = URL.createObjectURL(blob)
+      objectUrls.push(url)
+      images.push({
+        src: url,
+        filename: entry.filename,
+        label: field,
+      })
+    }
+
+    if (images.length) imageMap.set(field, images)
+  }
+
+  if (token === imageLoadToken) {
+    currentImages.value = imageMap
+    imageLoading.value = false
+  }
 }
 
-function showRecord(index) {
-  if (syncing.value || index < 0 || index >= records.length) return
+function loadSavedDecisions(key) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || '{}')
+    return saved && typeof saved === 'object' ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistDecisions() {
+  if (!batchStorageKey.value) return
+  localStorage.setItem(batchStorageKey.value, JSON.stringify(decisions.value))
+}
+
+async function importBatch() {
+  if (!zipFile.value || importState.value === 'loading') return
+
+  importState.value = 'loading'
+  importMessage.value = '正在读取压缩包、数据和附件索引…'
+
+  try {
+    const zip = await JSZip.loadAsync(zipFile.value, { createFolders: false })
+    const csvEntries = Object.values(zip.files)
+      .filter((entry) => (
+        !entry.dir
+        && /\.csv$/i.test(entry.name)
+        && !entry.name.startsWith('__MACOSX/')
+        && !entry.name.split('/').some((part) => part.startsWith('.'))
+      ))
+      .sort((a, b) => {
+        const aDepth = a.name.split('/').length
+        const bDepth = b.name.split('/').length
+        return aDepth - bDepth || a.name.localeCompare(b.name, 'zh-CN')
+      })
+
+    let csvSource = csvFile.value
+    let csvSourceName = csvFile.value?.name || ''
+    let csvSourceSize = csvFile.value?.size || 0
+
+    if (csvEntries.length) {
+      csvSource = await csvEntries[0].async('text')
+      csvSourceName = csvEntries[0].name
+      csvSourceSize = csvSource.length
+      needsSeparateCsv.value = false
+    } else if (!csvSource) {
+      needsSeparateCsv.value = true
+      throw new Error('这个 ZIP 内没有找到 CSV，请在下方补选数据 CSV')
+    }
+
+    const { data, fields } = await parseCsv(csvSource)
+
+    if (!fields.includes('编号')) throw new Error('CSV 中没有找到“编号”字段')
+    if (!data.length) throw new Error('CSV 中没有可用记录')
+
+    const builtRecords = data
+      .filter((row) => normalizeText(row['编号']))
+      .map(buildRecord)
+
+    const ids = builtRecords.map((record) => record.id)
+    const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
+    if (duplicateIds.length) {
+      throw new Error(`CSV 中存在重复编号：${[...new Set(duplicateIds)].join('、')}`)
+    }
+
+    const index = buildAttachmentIndex(zip)
+    let attachmentCount = 0
+    let multiImageFields = 0
+    let missingFields = 0
+
+    builtRecords.forEach((record) => {
+      ATTACHMENT_FIELDS.forEach((field) => {
+        const entries = index.get(field)?.get(record.id) || []
+        const csvHasAttachment = Boolean(normalizeText(record.row[field]))
+        attachmentCount += entries.length
+        if (entries.length > 1) multiImageFields += 1
+        if (csvHasAttachment && !entries.length) missingFields += 1
+      })
+    })
+
+    records.value = builtRecords
+    zipArchive.value = zip
+    attachmentIndex.value = index
+    validation.value = {
+      attachments: attachmentCount,
+      missing: missingFields,
+      multiple: multiImageFields,
+    }
+    currentIndex.value = 0
+    batchStorageKey.value = [
+      'screening-results-v4',
+      csvSourceSize,
+      zipFile.value.size,
+      builtRecords[0]?.id,
+      builtRecords.at(-1)?.id,
+    ].join(':')
+    decisions.value = loadSavedDecisions(batchStorageKey.value)
+    importState.value = 'ready'
+    importMessage.value = `已从 ${csvSourceName} 载入 ${builtRecords.length} 条记录`
+    await nextTick()
+    await loadCurrentImages()
+  } catch (error) {
+    importState.value = 'error'
+    importMessage.value = error?.message || '导入失败，请检查文件'
+  }
+}
+
+function handleCsvChange(event) {
+  csvFile.value = event.target.files?.[0] || null
+  if (csvFile.value && zipFile.value) importBatch()
+}
+
+function handleZipChange(event) {
+  zipFile.value = event.target.files?.[0] || null
+  csvFile.value = null
+  needsSeparateCsv.value = false
+  if (zipFile.value) importBatch()
+}
+
+async function showRecord(index) {
+  if (index < 0 || index >= records.value.length) return
   currentIndex.value = index
   lightboxImage.value = null
-  result.value = null
+  revealResult.value = null
+  currentImages.value = new Map()
   document.querySelector('.screening-content')?.scrollTo({ top: 0, behavior: 'smooth' })
+  await loadCurrentImages()
 }
 
 function goNext() {
-  showRecord(Math.min(currentIndex.value + 1, records.length - 1))
+  showRecord(Math.min(currentIndex.value + 1, records.value.length - 1))
 }
 
 function goPrevious() {
   showRecord(Math.max(currentIndex.value - 1, 0))
 }
 
-async function saveDecision(decision) {
-  if (syncing.value) return
+function saveDecision(decision) {
+  if (!current.value) return
 
-  syncing.value = true
-  result.value = null
-
-  // 初版先模拟飞书写入；接入后替换为实际接口请求。
-  await new Promise((resolve) => window.setTimeout(resolve, 720))
-
-  savedResults.value = {
-    ...savedResults.value,
+  const now = new Date()
+  decisions.value = {
+    ...decisions.value,
     [current.value.id]: {
       result: decision,
-      time: new Date().toISOString(),
-      note: '',
+      time: now.toLocaleString('zh-CN', { hour12: false }),
     },
   }
-  syncing.value = false
-  result.value = decision
+  persistDecisions()
+  revealResult.value = decision
 
-  window.clearTimeout(revealTimer)
-  revealTimer = window.setTimeout(async () => {
-    if (currentIndex.value < records.length - 1) {
-      currentIndex.value += 1
-      lightboxImage.value = null
-      await nextTick()
-      document.querySelector('.screening-content')?.scrollTo({ top: 0 })
-      result.value = null
+  window.clearTimeout(decisionTimer)
+  decisionTimer = window.setTimeout(() => {
+    if (currentIndex.value < records.value.length - 1) {
+      showRecord(currentIndex.value + 1)
+    } else {
+      revealResult.value = null
     }
-  }, 1500)
+  }, 900)
 }
 
-onBeforeUnmount(() => window.clearTimeout(revealTimer))
+function csvEscape(value) {
+  const text = String(value ?? '')
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function firstCharacter(value) {
+  return Array.from(String(value || ''))[0] || '鲲'
+}
+
+function exportResults() {
+  const rows = records.value
+    .filter((record) => decisions.value[record.id])
+    .map((record) => [
+      record.id,
+      decisions.value[record.id].result,
+      decisions.value[record.id].time,
+    ])
+
+  if (!rows.length) return
+
+  const csv = [
+    ['编号', '直播筛选结果', '直播筛选时间'],
+    ...rows,
+  ].map((row) => row.map(csvEscape).join(',')).join('\r\n')
+
+  const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `直播筛选结果_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function resetBatch() {
+  window.clearTimeout(decisionTimer)
+  imageLoadToken += 1
+  revokeObjectUrls()
+  records.value = []
+  csvFile.value = null
+  zipFile.value = null
+  needsSeparateCsv.value = false
+  zipArchive.value = null
+  attachmentIndex.value = new Map()
+  currentImages.value = new Map()
+  currentIndex.value = 0
+  importState.value = 'idle'
+  importMessage.value = ''
+  lightboxImage.value = null
+  revealResult.value = null
+  if (bundleInput.value) bundleInput.value.value = ''
+  if (csvInput.value) csvInput.value.value = ''
+}
+
+function openEvidence(image) {
+  lightboxImage.value = lightboxImage.value?.src === image.src ? null : image
+}
+
+onBeforeUnmount(() => {
+  window.clearTimeout(decisionTimer)
+  revokeObjectUrls()
+})
 </script>
 
 <template>
-  <main class="screening-page screening-page-vertical">
+  <main class="screening-page">
     <div class="screening-ambient" aria-hidden="true"></div>
 
-    <div class="screening-content">
-      <div class="vertical-shell">
-        <section class="applicant-hero">
-          <div class="applicant-number">
-            <span>CURRENT APPLICATION</span>
-            <strong>{{ String(currentIndex + 1).padStart(2, '0') }}</strong>
-          </div>
+    <section v-if="!current" class="import-shell">
+      <div class="import-mark" aria-hidden="true">鲲</div>
+      <p class="eyebrow">TIANHUO LIVE SCREENING</p>
+      <h1>导入本场筛选资料</h1>
+      <p class="import-intro">
+        选择包含 CSV 和附件文件夹的 ZIP。数据只在当前浏览器中读取，不上传服务器，也不会写回飞书。
+      </p>
 
-          <div class="applicant-main">
-            <div class="candidate-avatar">{{ current.nickname.slice(0, 1) }}</div>
-            <div>
-              <span class="precheck-badge">已通过初筛</span>
-              <h1>{{ current.nickname }}</h1>
-              <p>{{ current.id }} · 提交于 {{ current.submittedAt }}</p>
-            </div>
-          </div>
+      <div class="import-grid single">
+        <label class="file-card primary" :class="{ selected: zipFile }">
+          <input
+            ref="bundleInput"
+            type="file"
+            accept=".zip,application/zip"
+            @change="handleZipChange"
+          >
+          <span class="file-index">01</span>
+          <strong>{{ zipFile ? zipFile.name : '选择本场资料 ZIP' }}</strong>
+          <small>{{ zipFile ? '正在读取压缩包内容' : '内含一份 CSV 和对应附件文件夹' }}</small>
+        </label>
 
-          <div class="vertical-record-switcher">
-            <button type="button" :disabled="currentIndex === 0 || syncing" @click="goPrevious">
-              <span>←</span> 上一位
-            </button>
-            <button type="button" :disabled="currentIndex === records.length - 1 || syncing" @click="goNext">
-              下一位 <span>→</span>
-            </button>
-          </div>
-        </section>
-
-        <div class="privacy-banner">
-          <span aria-hidden="true">●</span>
-          直播画面已隐藏手机号、微信号、抖音 ID、MAC、ICCID 等敏感字段
-        </div>
-
-        <section
-          v-for="(group, groupIndex) in current.groups"
-          :key="group.id"
-          class="qa-section"
-        >
-          <header class="qa-section-heading">
-            <div>
-              <span>0{{ groupIndex + 1 }}</span>
-              <div>
-                <small>APPLICATION RESPONSES</small>
-                <h2>{{ group.label }}</h2>
-              </div>
-            </div>
-            <strong>{{ group.questions.length }} 项回答</strong>
-          </header>
-
-          <div v-if="compactQuestions(group).length" class="choice-summary">
-            <div
-              v-for="item in compactQuestions(group)"
-              :key="`choice-${item.number}`"
-              class="choice-summary-item"
-            >
-              <span>Q{{ String(item.number).padStart(2, '0') }}</span>
-              <div>
-                <small>{{ item.shortLabel || item.question }}</small>
-                <strong>{{ item.answer }}</strong>
-                <p v-if="item.detail">{{ item.detail }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="detailQuestions(group).length" class="qa-stack">
-            <article
-              v-for="item in detailQuestions(group)"
-              :key="item.number"
-              class="qa-entry"
-              :class="{ 'is-story': item.long, 'has-evidence': item.imageIndex !== undefined }"
-            >
-              <div class="qa-copy">
-                <span class="qa-number">Q{{ String(item.number).padStart(2, '0') }}</span>
-                <div>
-                  <h3>{{ item.question }}</h3>
-                  <p>{{ item.answer }}</p>
-                </div>
-              </div>
-
-              <button
-                v-if="item.imageIndex !== undefined"
-                class="inline-evidence"
-                type="button"
-                :aria-label="`全屏查看${current.images[item.imageIndex].label}`"
-                @click="openEvidence(item)"
-              >
-                <img
-                  :src="current.images[item.imageIndex].src"
-                  :alt="current.images[item.imageIndex].label"
-                  loading="lazy"
-                />
-                <span class="evidence-caption">
-                  <span>
-                    <small>ORIGINAL IMAGE</small>
-                    <strong>{{ item.imageLabel || current.images[item.imageIndex].label }}</strong>
-                  </span>
-                  <em>查看原图 ↗</em>
-                </span>
-              </button>
-            </article>
-          </div>
-
-          <div v-if="evidenceQuestions(group).length" class="evidence-section">
-            <header>
-              <span>PROOF MATERIALS</span>
-              <strong>对应证明材料</strong>
-            </header>
-            <div class="evidence-grid">
-              <article
-                v-for="item in evidenceQuestions(group)"
-                :key="`evidence-${item.number}`"
-                class="evidence-card"
-              >
-                <div class="evidence-question">
-                  <span>Q{{ String(item.evidenceNumber || item.number).padStart(2, '0') }}</span>
-                  <div>
-                    <small>{{ item.evidenceQuestion || item.question }}</small>
-                    <strong>{{ item.imageLabel }}</strong>
-                  </div>
-                </div>
-                <button
-                  class="inline-evidence"
-                  type="button"
-                  :aria-label="`全屏查看${current.images[item.imageIndex].label}`"
-                  @click="openEvidence(item)"
-                >
-                  <img
-                    :src="current.images[item.imageIndex].src"
-                    :alt="current.images[item.imageIndex].label"
-                    loading="lazy"
-                  />
-                  <span class="evidence-caption">
-                    <span>
-                      <small>ORIGINAL IMAGE</small>
-                      <strong>{{ item.imageLabel }}</strong>
-                    </span>
-                    <em>查看原图 ↗</em>
-                  </span>
-                </button>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <div class="content-end">
-          <span>END OF APPLICATION</span>
-          <p>以上为当前申请人的直播展示内容</p>
-        </div>
-      </div>
-    </div>
-
-    <footer class="decision-bar vertical-decision-bar">
-      <div class="decision-reject-column">
-        <button
-          class="decision-button decision-reject"
-          type="button"
-          :disabled="syncing"
-          @click="saveDecision('不通过')"
-        >
-          <span>×</span>
-          <div><strong>不通过</strong><small>REJECT</small></div>
-        </button>
+        <label v-if="needsSeparateCsv" class="file-card fallback" :class="{ selected: csvFile }">
+          <input
+            ref="csvInput"
+            type="file"
+            accept=".csv,text/csv"
+            @change="handleCsvChange"
+          >
+          <span class="file-index">02</span>
+          <strong>{{ csvFile ? csvFile.name : '补选数据 CSV' }}</strong>
+          <small>{{ csvFile ? '数据文件已选择' : '仅用于兼容旧版附件压缩包' }}</small>
+        </label>
       </div>
 
       <button
-        class="decision-button decision-pass"
+        class="import-action"
         type="button"
-        :disabled="syncing"
+        :disabled="!zipFile || (needsSeparateCsv && !csvFile) || importState === 'loading'"
+        @click="importBatch"
+      >
+        <span v-if="importState === 'loading'" class="spinner"></span>
+        {{ importState === 'loading' ? '正在载入真实资料…' : '载入本场名单' }}
+      </button>
+
+      <p v-if="importMessage" class="import-message" :class="importState">
+        {{ importMessage }}
+      </p>
+    </section>
+
+    <template v-else>
+      <aside class="batch-panel">
+        <div class="batch-progress">
+          <span>本场进度</span>
+          <strong>{{ reviewedCount }}<small>/{{ records.length }}</small></strong>
+        </div>
+        <div class="progress-track">
+          <i :style="{ width: `${progressPercent}%` }"></i>
+        </div>
+        <div class="batch-actions">
+          <button type="button" :disabled="!reviewedCount" @click="exportResults">导出结果</button>
+          <button type="button" class="quiet" @click="resetBatch">更换批次</button>
+        </div>
+      </aside>
+
+      <div class="screening-content">
+        <div class="vertical-shell">
+          <section class="applicant-hero">
+            <div class="applicant-number">
+              <span>APPLICATION</span>
+              <strong>{{ current.id }}</strong>
+            </div>
+
+            <div class="applicant-main">
+              <div class="candidate-avatar">{{ firstCharacter(current.nickname) }}</div>
+              <div>
+                <span class="precheck-badge">已通过初筛 · 本地只读审核</span>
+                <h1><small>抖音昵称</small>{{ current.nickname }}</h1>
+                <p>
+                  编号 {{ current.id }} · 提交于 {{ current.submittedAt }}
+                  <template v-if="current.wechatNickname">
+                    · 微信昵称 {{ current.wechatNickname }}
+                  </template>
+                </p>
+              </div>
+            </div>
+
+            <div class="vertical-record-switcher">
+              <button type="button" :disabled="currentIndex === 0" @click="goPrevious">
+                <span>←</span> 上一位
+              </button>
+              <strong>{{ currentIndex + 1 }} / {{ records.length }}</strong>
+              <button
+                type="button"
+                :disabled="currentIndex === records.length - 1"
+                @click="goNext"
+              >
+                下一位 <span>→</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="privacy-strip">
+            <span>隐私保护</span>
+            昵称可展示；手机号、账号 ID、MAC、ICCID 等敏感信息已自动隐藏
+            <em>
+              已匹配 {{ validation.attachments }} 张附件
+              <template v-if="validation.multiple"> · {{ validation.multiple }} 处多图</template>
+              <template v-if="validation.missing"> · {{ validation.missing }} 处附件待核对</template>
+            </em>
+          </section>
+
+          <section
+            v-for="(group, groupIndex) in current.groups"
+            :key="group.id"
+            class="question-section"
+          >
+            <header class="section-heading">
+              <span>{{ String(groupIndex + 1).padStart(2, '0') }}</span>
+              <div>
+                <small>FORM RESPONSES</small>
+                <h2>{{ group.label }}</h2>
+              </div>
+            </header>
+
+            <div v-if="compactQuestions(group).length" class="compact-question-grid">
+              <article
+                v-for="question in compactQuestions(group)"
+                :key="question.number"
+                class="compact-question"
+                :class="{ empty: question.answer === '未填写' }"
+              >
+                <div class="question-number">Q{{ String(question.number).padStart(2, '0') }}</div>
+                <div>
+                  <p>{{ question.shortLabel }}</p>
+                  <strong>{{ question.answer }}</strong>
+                </div>
+              </article>
+            </div>
+
+            <div v-if="detailQuestions(group).length" class="detail-question-list">
+              <article
+                v-for="question in detailQuestions(group)"
+                :key="question.number"
+                class="detail-question"
+                :class="{ long: question.long, empty: question.answer === '未填写' }"
+              >
+                <header>
+                  <span>Q{{ String(question.number).padStart(2, '0') }}</span>
+                  <p>{{ question.question }}</p>
+                </header>
+                <div class="detail-answer">{{ question.answer }}</div>
+                <div v-if="question.detail" class="detail-subanswer">
+                  <span>{{ question.detailLabel }}</span>
+                  {{ question.detail }}
+                </div>
+              </article>
+            </div>
+
+            <div v-if="evidenceQuestions(group).length" class="evidence-list">
+              <article
+                v-for="question in evidenceQuestions(group)"
+                :key="`evidence-${question.number}`"
+                class="evidence-block"
+              >
+                <header>
+                  <span>Q{{ String(question.evidence.number).padStart(2, '0') }}</span>
+                  <div>
+                    <small>ORIGINAL IMAGE</small>
+                    <h3>{{ question.evidence.question }}</h3>
+                  </div>
+                  <em v-if="questionImages(question).length">
+                    {{ questionImages(question).length }} 张原图
+                  </em>
+                </header>
+
+                <div v-if="imageLoading" class="image-loading">
+                  <span class="spinner"></span>
+                  正在读取原图
+                </div>
+
+                <div v-else-if="questionImages(question).length" class="evidence-images">
+                  <figure
+                    v-for="(image, imageIndex) in questionImages(question)"
+                    :key="image.src"
+                    @click="openEvidence(image)"
+                  >
+                    <img :src="image.src" :alt="`${question.evidence.question} ${imageIndex + 1}`">
+                    <figcaption>
+                      <span>原图 {{ imageIndex + 1 }} / {{ questionImages(question).length }}</span>
+                      <small>点击放大，再次点击关闭</small>
+                    </figcaption>
+                  </figure>
+                </div>
+
+                <div v-else class="no-evidence">本题未提供附件</div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="decision-button decision-reject"
+        :class="{ selected: currentDecision?.result === '不通过' }"
+        @click="saveDecision('不通过')"
+      >
+        <span>×</span>
+        <strong>不通过</strong>
+      </button>
+
+      <button
+        type="button"
+        class="decision-button decision-approve"
+        :class="{ selected: currentDecision?.result === '通过' }"
         @click="saveDecision('通过')"
       >
         <span>✓</span>
-        <div><strong>通过</strong><small>APPROVE</small></div>
+        <strong>通过</strong>
       </button>
-    </footer>
 
-    <Transition name="result-reveal">
-      <div
-        v-if="lightboxImage"
-        class="image-lightbox"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="lightboxImage.label"
-        @click.self="closeEvidence"
-      >
-        <div class="lightbox-head">
-          <div>
-            <small>ORIGINAL IMAGE</small>
-            <strong>{{ lightboxImage.label }}</strong>
-          </div>
-          <button type="button" aria-label="关闭原图" @click="closeEvidence">×</button>
-        </div>
-        <img
-          :src="lightboxImage.src"
-          :alt="lightboxImage.label"
-          title="再次点击关闭原图"
-          @click="closeEvidence"
-        />
-        <p>再次点击图片关闭</p>
+      <div v-if="revealResult" class="decision-reveal" :class="revealResult === '通过' ? 'approve' : 'reject'">
+        <span>{{ revealResult === '通过' ? '✓' : '×' }}</span>
+        <strong>{{ revealResult }}</strong>
+        <small>结果已保存到本机</small>
       </div>
-    </Transition>
+    </template>
 
-    <Transition name="result-reveal">
-      <div v-if="syncing || result" class="result-overlay" :class="result === '通过' ? 'is-pass' : 'is-reject'">
-        <div v-if="syncing" class="syncing-state">
-          <span class="sync-spinner"></span>
-          <small>正在同步至飞书表格</small>
-          <strong>保存筛选结果</strong>
-        </div>
-        <div v-else class="result-state">
-          <span>{{ result === '通过' ? '✓' : '×' }}</span>
-          <small>LIVE SCREENING RESULT</small>
-          <strong>{{ result }}</strong>
-          <p>结果已同步 · 即将进入下一位</p>
-        </div>
+    <div
+      v-if="lightboxImage"
+      class="evidence-lightbox"
+      role="button"
+      tabindex="0"
+      aria-label="关闭原图"
+      @click="openEvidence(lightboxImage)"
+      @keydown.enter="openEvidence(lightboxImage)"
+    >
+      <img :src="lightboxImage.src" :alt="lightboxImage.label">
+      <div>
+        <strong>{{ lightboxImage.label }}</strong>
+        <span>再次点击关闭原图</span>
       </div>
-    </Transition>
+    </div>
   </main>
 </template>
