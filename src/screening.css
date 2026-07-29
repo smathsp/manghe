@@ -707,6 +707,16 @@ button {
   transition-duration: 70ms;
 }
 
+.decision-button:disabled {
+  cursor: wait;
+  filter: grayscale(0.35);
+  opacity: 0.55;
+}
+
+.decision-button:disabled:hover {
+  transform: none;
+}
+
 .decision-button > span {
   display: grid;
   width: 34px;
@@ -761,6 +771,37 @@ button {
   outline: 2px solid currentColor;
   outline-offset: 3px;
   animation: selected-pulse 1.8s ease-in-out infinite;
+}
+
+.decision-sync-status {
+  position: fixed;
+  z-index: 31;
+  right: 50%;
+  bottom: 34px;
+  display: flex;
+  min-height: 44px;
+  max-width: min(520px, calc(100vw - 560px));
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border: 1px solid rgba(94, 158, 126, 0.24);
+  border-radius: 14px;
+  color: #a9c4b6;
+  background: rgba(5, 22, 15, 0.92);
+  transform: translateX(50%);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+}
+
+.decision-sync-status.success {
+  border-color: rgba(72, 199, 126, 0.35);
+  color: #8be0ac;
+}
+
+.decision-sync-status.error {
+  border-color: rgba(221, 100, 88, 0.4);
+  color: #efaaa2;
 }
 
 @keyframes selected-pulse {
@@ -1028,12 +1069,13 @@ button {
   z-index: 2;
   display: flex;
   width: min(880px, calc(100vw - 40px));
-  min-height: 100vh;
+  height: 100vh;
   margin: 0 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 48px 0;
+  overflow-y: auto;
   text-align: center;
 }
 
@@ -1068,6 +1110,205 @@ button {
   color: #87a294;
   font-size: 15px;
   line-height: 1.75;
+}
+
+.source-mode-switch {
+  display: grid;
+  width: min(430px, 100%);
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin: 0 auto 18px;
+  padding: 5px;
+  border: 1px solid rgba(87, 158, 119, 0.18);
+  border-radius: 16px;
+  background: rgba(5, 24, 16, 0.72);
+}
+
+.source-mode-switch button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 11px;
+  color: #708c7d;
+  background: transparent;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.source-mode-switch button.active {
+  color: #dbf5e6;
+  background: linear-gradient(135deg, rgba(35, 116, 72, 0.72), rgba(20, 71, 46, 0.78));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.feishu-connect-panel,
+.local-import-panel {
+  width: 100%;
+}
+
+.feishu-connect-panel {
+  padding: 24px;
+  border: 1px solid rgba(87, 158, 119, 0.22);
+  border-radius: 24px;
+  background: rgba(8, 32, 22, 0.82);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.credential-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  text-align: left;
+}
+
+.credential-grid label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.credential-grid label span {
+  color: #82a392;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.credential-grid input,
+.feishu-search-bar input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(99, 168, 132, 0.24);
+  border-radius: 13px;
+  outline: none;
+  color: #e7f5ed;
+  background: rgba(3, 19, 12, 0.75);
+  transition: 160ms ease;
+}
+
+.credential-grid input:focus,
+.feishu-search-bar input:focus {
+  border-color: rgba(86, 206, 141, 0.6);
+  box-shadow: 0 0 0 3px rgba(65, 179, 115, 0.1);
+}
+
+.credential-grid input::placeholder,
+.feishu-search-bar input::placeholder {
+  color: #4e6c5c;
+}
+
+.credential-note {
+  margin: 10px 0 18px;
+  color: #607d6e;
+  text-align: left;
+  font-size: 11px;
+}
+
+.feishu-search-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 116px 148px;
+  gap: 10px;
+}
+
+.feishu-search-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(71, 200, 126, 0.46);
+  border-radius: 13px;
+  color: #dff9e9;
+  background: linear-gradient(135deg, #1a6a40, #10472d);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.feishu-search-bar .next-unreviewed-button {
+  border-color: rgba(204, 171, 83, 0.36);
+  color: #e8d494;
+  background: linear-gradient(135deg, rgba(109, 82, 22, 0.78), rgba(65, 48, 14, 0.82));
+}
+
+.feishu-search-bar button:disabled,
+.feishu-result-card:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.feishu-result-list {
+  display: grid;
+  max-height: 320px;
+  gap: 8px;
+  margin-top: 16px;
+  overflow-y: auto;
+  scrollbar-color: #245c42 transparent;
+}
+
+.feishu-result-card {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid rgba(86, 158, 119, 0.18);
+  border-radius: 15px;
+  color: #dceee4;
+  background: rgba(5, 25, 17, 0.72);
+  text-align: left;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.feishu-result-card:hover:not(:disabled) {
+  border-color: rgba(79, 200, 133, 0.5);
+  transform: translateY(-1px);
+  background: rgba(14, 51, 35, 0.9);
+}
+
+.result-number {
+  color: #d7bd72;
+  font: 700 15px/1 "Arial Narrow", Inter, sans-serif;
+}
+
+.result-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.result-main strong,
+.result-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-main small {
+  color: #708d7d;
+  font-size: 11px;
+}
+
+.result-status {
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #879b90;
+  background: rgba(102, 127, 114, 0.12);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.result-status.pass {
+  color: #7bdd9f;
+  background: rgba(50, 173, 101, 0.14);
+}
+
+.import-message.ready,
+.import-message.opening {
+  color: #81d6a3;
 }
 
 .import-grid {
@@ -1246,8 +1487,39 @@ button {
 
   .compact-question-grid,
   .import-grid,
+  .credential-grid,
   .traffic-card-grid {
     grid-template-columns: 1fr;
+  }
+
+  .feishu-connect-panel {
+    padding: 16px;
+  }
+
+  .feishu-search-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .feishu-search-bar button {
+    min-height: 46px;
+  }
+
+  .feishu-result-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .result-status {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .decision-sync-status {
+    right: 12px;
+    bottom: 82px;
+    left: 12px;
+    max-width: none;
+    justify-content: center;
+    transform: none;
   }
 
   .traffic-card-detail > header {

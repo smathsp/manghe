@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/vite-local.mjs",
     "build": "vite build && node scripts/prepare-sites.mjs",
-    "preview": "vite preview",
+    "preview": "node scripts/vite-local.mjs preview",
     "export:thanks": "node scripts/export-thanks-image.mjs",
     "export:void-box": "node scripts/export-void-box-image.mjs"
   },

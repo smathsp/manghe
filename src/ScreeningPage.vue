@@ -188,6 +188,15 @@ const zipFile = ref(null)
 const needsSeparateCsv = ref(false)
 const importState = ref('idle')
 const importMessage = ref('')
+const sourceMode = ref('feishu')
+const feishuAppId = ref('')
+const feishuAppSecret = ref('')
+const feishuQuery = ref('')
+const feishuSearchState = ref('idle')
+const feishuMessage = ref('')
+const feishuResults = ref([])
+const decisionSyncState = ref('idle')
+const decisionSyncMessage = ref('')
 const records = ref([])
 const currentIndex = ref(0)
 const zipArchive = ref(null)
@@ -215,7 +224,24 @@ const currentDecision = computed(() => (
 ))
 
 function normalizeText(value) {
+  if (Array.isArray(value)) return value.map(normalizeText).filter(Boolean).join('\n')
+  if (value && typeof value === 'object') {
+    return normalizeText(value.text ?? value.name ?? value.value ?? '')
+  }
   return String(value ?? '').replace(/\r\n/g, '\n').trim()
+}
+
+function formatFeishuTime(value) {
+  const timestamp = Number(value)
+  if (!timestamp) return normalizeText(value) || '时间未知'
+  const milliseconds = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp
+  return new Date(milliseconds).toLocaleString('zh-CN', { hour12: false })
+}
+
+function maskPhone(value) {
+  const phone = normalizeText(value).replace(/\D/g, '')
+  if (!/^1[3-9]\d{9}$/.test(phone)) return '手机号未识别'
+  return `${phone.slice(0, 3)}****${phone.slice(-4)}`
 }
 
 function normalizeIccid(value) {
@@ -299,7 +325,11 @@ function buildRecord(row, index) {
     nickname: douyinNickname || wechatNickname || `申请人 ${id}`,
     wechatNickname,
     wechatPhone,
-    submittedAt: normalizeText(row['提交时间']) || '时间未知',
+    submittedAt: row._createdTime
+      ? formatFeishuTime(row._createdTime)
+      : normalizeText(row['提交时间']) || '时间未知',
+    remote: Boolean(row._remote),
+    recordId: normalizeText(row._recordId),
     trafficCard: buildTrafficCard(row),
     groups: GROUPS.map((group) => ({
       ...group,
@@ -411,9 +441,179 @@ function revokeObjectUrls() {
   objectUrls = []
 }
 
+function remoteAttachments(value) {
+  const items = Array.isArray(value) ? value : value ? [value] : []
+  return items
+    .map((item) => ({
+      fileToken: normalizeText(item?.file_token ?? item?.fileToken ?? item?.token),
+      filename: normalizeText(item?.name ?? item?.file_name) || '飞书原图',
+    }))
+    .filter((item) => item.fileToken)
+}
+
+async function feishuRequest(path, payload = {}, { blob = false } = {}) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      appId: feishuAppId.value.trim(),
+      appSecret: feishuAppSecret.value.trim(),
+      ...payload,
+    }),
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.message || '飞书请求失败')
+  }
+
+  return blob ? response.blob() : response.json()
+}
+
+async function searchFeishu() {
+  if (feishuSearchState.value === 'loading') return
+  if (!feishuAppId.value.trim() || !feishuAppSecret.value.trim()) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = '请先填写 App ID 和 App Secret'
+    return
+  }
+  if (!feishuQuery.value.trim()) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = '请输入编号、手机号、微信或抖音昵称进行搜索'
+    return
+  }
+
+  feishuSearchState.value = 'loading'
+  feishuMessage.value = '正在读取飞书真实记录…'
+  feishuResults.value = []
+
+  try {
+    const data = await feishuRequest('/api/feishu/search', { query: feishuQuery.value })
+    feishuResults.value = data.records || []
+    feishuSearchState.value = 'ready'
+    feishuMessage.value = feishuResults.value.length
+      ? `找到 ${feishuResults.value.length} 条匹配记录，请选择要审核的人`
+      : '没有找到匹配记录，请换编号、手机号或昵称重试'
+  } catch (error) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = error?.message || '搜索飞书记录失败'
+  }
+}
+
+async function openNextUnreviewed(afterNumber = '') {
+  if (!feishuAppId.value.trim() || !feishuAppSecret.value.trim()) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = '请先填写 App ID 和 App Secret'
+    return
+  }
+  if (feishuSearchState.value === 'opening') return
+
+  feishuSearchState.value = 'opening'
+  if (current.value) {
+    decisionSyncState.value = 'saving'
+    decisionSyncMessage.value = '正在打开下一条未审核记录…'
+  } else {
+    feishuMessage.value = '正在查找下一条未审核记录…'
+  }
+
+  try {
+    const data = await feishuRequest('/api/feishu/next', { afterNumber })
+    if (!data.record) {
+      feishuSearchState.value = 'ready'
+      if (current.value) {
+        decisionSyncState.value = 'success'
+        decisionSyncMessage.value = '没有更多符合初筛条件的未审核记录'
+      } else {
+        feishuMessage.value = '没有找到符合初筛条件的未审核记录'
+      }
+      return
+    }
+    await openFeishuRecord(data.record)
+  } catch (error) {
+    feishuSearchState.value = 'error'
+    if (current.value) {
+      decisionSyncState.value = 'error'
+      decisionSyncMessage.value = `下一条记录载入失败：${error?.message || '请手动返回搜索'}`
+    } else {
+      feishuMessage.value = error?.message || '查找下一条未审核记录失败'
+    }
+  }
+}
+
+function summarizeRemoteValidation(record) {
+  let attachments = 0
+  let multiple = 0
+  let missing = 0
+
+  for (const field of ATTACHMENT_FIELDS) {
+    const count = remoteAttachments(record.row[field]).length
+    attachments += count
+    if (count > 1) multiple += 1
+  }
+
+  for (const group of record.groups) {
+    for (const question of group.questions.filter((item) => item.evidence)) {
+      if (shouldShowEvidence(question.answer)
+        && remoteAttachments(record.row[question.evidence.field]).length === 0) {
+        missing += 1
+      }
+    }
+  }
+
+  return { attachments, missing, multiple }
+}
+
+async function openFeishuRecord(summary) {
+  if (feishuSearchState.value === 'opening') return
+  feishuSearchState.value = 'opening'
+  feishuMessage.value = '正在载入完整问答和原图…'
+
+  try {
+    const data = await feishuRequest('/api/feishu/record', {
+      recordId: summary.record_id,
+    })
+    if (!data.record) throw new Error('飞书没有返回该条记录')
+
+    const row = {
+      ...(data.record.fields || {}),
+      _remote: true,
+      _recordId: data.record.record_id,
+      _createdTime: data.record.created_time,
+    }
+    const built = buildRecord(row, 0)
+    records.value = [built]
+    currentIndex.value = 0
+    zipArchive.value = null
+    batchStorageKey.value = ''
+    batchName.value = '飞书实时审核'
+    autoExported.value = false
+    decisionSyncState.value = 'idle'
+    decisionSyncMessage.value = ''
+
+    const previousResult = normalizeText(row['直播筛选结果'])
+    decisions.value = previousResult
+      ? {
+          [built.id]: {
+            result: previousResult,
+            time: formatFeishuTime(row['直播筛选时间']),
+          },
+        }
+      : {}
+
+    validation.value = summarizeRemoteValidation(built)
+    feishuSearchState.value = 'ready'
+    feishuMessage.value = ''
+    await nextTick()
+    await loadCurrentImages()
+  } catch (error) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = error?.message || '载入飞书记录失败'
+  }
+}
+
 async function loadCurrentImages() {
   const record = current.value
-  if (!record || !zipArchive.value) {
+  if (!record) {
     currentImages.value = new Map()
     return
   }
@@ -423,6 +623,45 @@ async function loadCurrentImages() {
   revokeObjectUrls()
 
   const imageMap = new Map()
+
+  if (record.remote) {
+    try {
+      for (const field of ATTACHMENT_FIELDS) {
+        const entries = remoteAttachments(record.row[field])
+        const images = []
+
+        for (const entry of entries) {
+          const blob = await feishuRequest('/api/feishu/attachment', {
+            recordId: record.recordId,
+            fieldName: field,
+            fileToken: entry.fileToken,
+          }, { blob: true })
+          if (token !== imageLoadToken) return
+
+          const url = URL.createObjectURL(blob)
+          objectUrls.push(url)
+          images.push({ src: url, filename: entry.filename, label: field })
+        }
+
+        if (images.length) imageMap.set(field, images)
+      }
+    } catch (error) {
+      decisionSyncMessage.value = `部分飞书原图读取失败：${error?.message || '请检查附件权限'}`
+    }
+
+    if (token === imageLoadToken) {
+      currentImages.value = imageMap
+      imageLoading.value = false
+    }
+    return
+  }
+
+  if (!zipArchive.value) {
+    currentImages.value = new Map()
+    imageLoading.value = false
+    return
+  }
+
   for (const field of ATTACHMENT_FIELDS) {
     const entries = attachmentEntries(field, record.id)
     const images = []
@@ -592,13 +831,33 @@ function goPrevious() {
   showRecord(Math.max(currentIndex.value - 1, 0))
 }
 
-function saveDecision(decision) {
-  if (!current.value) return
+async function saveDecision(decision) {
+  if (!current.value || decisionSyncState.value === 'saving') return
 
   const now = new Date()
+  const record = current.value
+
+  if (record.remote) {
+    decisionSyncState.value = 'saving'
+    decisionSyncMessage.value = `正在把“${decision}”同步到飞书…`
+    try {
+      const data = await feishuRequest('/api/feishu/review', {
+        recordId: record.recordId,
+        result: decision,
+      })
+      now.setTime(Number(data.review_time) || Date.now())
+      decisionSyncState.value = 'success'
+      decisionSyncMessage.value = `已同步到飞书：${decision} · ${now.toLocaleString('zh-CN', { hour12: false })}`
+    } catch (error) {
+      decisionSyncState.value = 'error'
+      decisionSyncMessage.value = error?.message || '审核结果同步失败，请重试'
+      return
+    }
+  }
+
   const updatedDecisions = {
     ...decisions.value,
-    [current.value.id]: {
+    [record.id]: {
       result: decision,
       time: now.toLocaleString('zh-CN', { hour12: false }),
     },
@@ -607,7 +866,8 @@ function saveDecision(decision) {
   persistDecisions()
   revealResult.value = decision
 
-  const batchComplete = records.value.length > 0
+  const batchComplete = !record.remote
+    && records.value.length > 0
     && Object.keys(updatedDecisions).length === records.value.length
 
   if (batchComplete && !autoExported.value) {
@@ -617,7 +877,9 @@ function saveDecision(decision) {
 
   window.clearTimeout(decisionTimer)
   decisionTimer = window.setTimeout(() => {
-    if (currentIndex.value < records.value.length - 1) {
+    if (record.remote) {
+      openNextUnreviewed(record.id)
+    } else if (currentIndex.value < records.value.length - 1) {
       showRecord(currentIndex.value + 1)
     } else {
       revealResult.value = null
@@ -695,6 +957,8 @@ function resetBatch() {
   autoExported.value = false
   lightboxImage.value = null
   revealResult.value = null
+  decisionSyncState.value = 'idle'
+  decisionSyncMessage.value = ''
   if (bundleInput.value) bundleInput.value.value = ''
   if (csvInput.value) csvInput.value.value = ''
 }
@@ -716,50 +980,162 @@ onBeforeUnmount(() => {
     <section v-if="!current" class="import-shell">
       <div class="import-mark" aria-hidden="true">鲲</div>
       <p class="eyebrow">TIANHUO LIVE SCREENING</p>
-      <h1>导入本场筛选资料</h1>
+      <h1>选择审核数据</h1>
       <p class="import-intro">
-        选择包含 CSV 和附件文件夹的 ZIP。数据只在当前浏览器中读取，不上传服务器，也不会写回飞书。
+        可通过飞书机器人查找真实记录并同步审核结果，也可继续导入本地 ZIP 审核。
       </p>
 
-      <div class="import-grid single">
-        <label class="file-card primary" :class="{ selected: zipFile }">
-          <input
-            ref="bundleInput"
-            type="file"
-            accept=".zip,application/zip"
-            @change="handleZipChange"
-          >
-          <span class="file-index">01</span>
-          <strong>{{ zipFile ? zipFile.name : '选择本场资料 ZIP' }}</strong>
-          <small>{{ zipFile ? '正在读取压缩包内容' : '内含一份 CSV 和对应附件文件夹' }}</small>
-        </label>
-
-        <label v-if="needsSeparateCsv" class="file-card fallback" :class="{ selected: csvFile }">
-          <input
-            ref="csvInput"
-            type="file"
-            accept=".csv,text/csv"
-            @change="handleCsvChange"
-          >
-          <span class="file-index">02</span>
-          <strong>{{ csvFile ? csvFile.name : '补选数据 CSV' }}</strong>
-          <small>{{ csvFile ? '数据文件已选择' : '仅用于兼容旧版附件压缩包' }}</small>
-        </label>
+      <div class="source-mode-switch" role="tablist" aria-label="审核数据来源">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="sourceMode === 'feishu'"
+          :class="{ active: sourceMode === 'feishu' }"
+          @click="sourceMode = 'feishu'"
+        >
+          飞书机器人
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="sourceMode === 'local'"
+          :class="{ active: sourceMode === 'local' }"
+          @click="sourceMode = 'local'"
+        >
+          本地 ZIP
+        </button>
       </div>
 
-      <button
-        class="import-action"
-        type="button"
-        :disabled="!zipFile || (needsSeparateCsv && !csvFile) || importState === 'loading'"
-        @click="importBatch"
-      >
-        <span v-if="importState === 'loading'" class="spinner"></span>
-        {{ importState === 'loading' ? '正在载入真实资料…' : '载入本场名单' }}
-      </button>
+      <div v-if="sourceMode === 'feishu'" class="feishu-connect-panel">
+        <div class="credential-grid">
+          <label>
+            <span>App ID</span>
+            <input
+              v-model.trim="feishuAppId"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="cli_xxxxxxxxxxxxxxxx"
+            >
+          </label>
+          <label>
+            <span>App Secret</span>
+            <input
+              v-model="feishuAppSecret"
+              type="password"
+              autocomplete="new-password"
+              spellcheck="false"
+              placeholder="只在当前页面使用"
+            >
+          </label>
+        </div>
 
-      <p v-if="importMessage" class="import-message" :class="importState">
-        {{ importMessage }}
-      </p>
+        <p class="credential-note">
+          凭据仅保留在当前打开的页面内；搜索范围为公开问卷全表，不受飞书视图筛选限制。
+        </p>
+
+        <form class="feishu-search-bar" @submit.prevent="searchFeishu">
+          <input
+            v-model.trim="feishuQuery"
+            type="search"
+            autocomplete="off"
+            placeholder="输入编号、微信手机号、微信/抖音昵称或抖音 ID"
+          >
+          <button type="submit" :disabled="feishuSearchState === 'loading' || feishuSearchState === 'opening'">
+            <span v-if="feishuSearchState === 'loading'" class="spinner"></span>
+            {{ feishuSearchState === 'loading' ? '搜索中' : '搜索全表' }}
+          </button>
+          <button
+            type="button"
+            class="next-unreviewed-button"
+            :disabled="feishuSearchState === 'loading' || feishuSearchState === 'opening'"
+            @click="openNextUnreviewed()"
+          >
+            <span v-if="feishuSearchState === 'opening'" class="spinner"></span>
+            下一个未审核
+          </button>
+        </form>
+
+        <p
+          v-if="feishuMessage"
+          class="import-message"
+          :class="feishuSearchState"
+        >
+          {{ feishuMessage }}
+        </p>
+
+        <div v-if="feishuResults.length" class="feishu-result-list">
+          <button
+            v-for="record in feishuResults"
+            :key="record.record_id"
+            type="button"
+            class="feishu-result-card"
+            :disabled="feishuSearchState === 'opening'"
+            @click="openFeishuRecord(record)"
+          >
+            <span class="result-number">#{{ normalizeText(record.fields['编号']) || '未编号' }}</span>
+            <span class="result-main">
+              <strong>
+                {{ normalizeText(record.fields['你的抖音昵称'])
+                  || getWechatNickname(record.fields['你的微信号【微信昵称】'])
+                  || '未填写昵称' }}
+              </strong>
+              <small>
+                {{ maskPhone(record.fields['你的微信注册手机号']) }}
+                · 初筛 {{ normalizeText(record.fields['初筛状态']) || '未标记' }}
+              </small>
+            </span>
+            <span
+              class="result-status"
+              :class="normalizeText(record.fields['直播筛选结果']) === '通过' ? 'pass' : 'pending'"
+            >
+              {{ normalizeText(record.fields['直播筛选结果']) || '未直播审核' }}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div v-else class="local-import-panel">
+        <div class="import-grid single">
+          <label class="file-card primary" :class="{ selected: zipFile }">
+            <input
+              ref="bundleInput"
+              type="file"
+              accept=".zip,application/zip"
+              @change="handleZipChange"
+            >
+            <span class="file-index">01</span>
+            <strong>{{ zipFile ? zipFile.name : '选择本场资料 ZIP' }}</strong>
+            <small>{{ zipFile ? '正在读取压缩包内容' : '内含一份 CSV 和对应附件文件夹' }}</small>
+          </label>
+
+          <label v-if="needsSeparateCsv" class="file-card fallback" :class="{ selected: csvFile }">
+            <input
+              ref="csvInput"
+              type="file"
+              accept=".csv,text/csv"
+              @change="handleCsvChange"
+            >
+            <span class="file-index">02</span>
+            <strong>{{ csvFile ? csvFile.name : '补选数据 CSV' }}</strong>
+            <small>{{ csvFile ? '数据文件已选择' : '仅用于兼容旧版附件压缩包' }}</small>
+          </label>
+        </div>
+
+        <button
+          class="import-action"
+          type="button"
+          :disabled="!zipFile || (needsSeparateCsv && !csvFile) || importState === 'loading'"
+          @click="importBatch"
+        >
+          <span v-if="importState === 'loading'" class="spinner"></span>
+          {{ importState === 'loading' ? '正在载入真实资料…' : '载入本场名单' }}
+        </button>
+
+        <p v-if="importMessage" class="import-message" :class="importState">
+          {{ importMessage }}
+        </p>
+      </div>
     </section>
 
     <template v-else>
@@ -772,8 +1148,13 @@ onBeforeUnmount(() => {
           <i :style="{ width: `${progressPercent}%` }"></i>
         </div>
         <div class="batch-actions">
-          <button type="button" :disabled="!reviewedCount" @click="exportResults()">导出结果</button>
-          <button type="button" class="quiet" @click="resetBatch">更换批次</button>
+          <template v-if="current.remote">
+            <button type="button" class="quiet" @click="resetBatch">返回搜索</button>
+          </template>
+          <template v-else>
+            <button type="button" :disabled="!reviewedCount" @click="exportResults()">导出结果</button>
+            <button type="button" class="quiet" @click="resetBatch">更换批次</button>
+          </template>
         </div>
       </aside>
 
@@ -788,7 +1169,9 @@ onBeforeUnmount(() => {
             <div class="applicant-main">
               <div class="candidate-avatar">{{ firstCharacter(current.nickname) }}</div>
               <div>
-                <span class="precheck-badge">已通过初筛 · 本地只读审核</span>
+                <span class="precheck-badge">
+                  {{ current.remote ? '飞书实时记录 · 审核结果可同步' : '已通过初筛 · 本地只读审核' }}
+                </span>
                 <h1><small>抖音昵称</small>{{ current.nickname }}</h1>
                 <p>
                   编号 {{ current.id }} · 提交于 {{ current.submittedAt }}
@@ -960,10 +1343,21 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <div
+        v-if="decisionSyncMessage"
+        class="decision-sync-status"
+        :class="decisionSyncState"
+        role="status"
+      >
+        <span v-if="decisionSyncState === 'saving'" class="spinner"></span>
+        {{ decisionSyncMessage }}
+      </div>
+
       <button
         type="button"
         class="decision-button decision-reject"
         :class="{ selected: currentDecision?.result === '不通过' }"
+        :disabled="decisionSyncState === 'saving'"
         @click="saveDecision('不通过')"
       >
         <span>×</span>
@@ -974,6 +1368,7 @@ onBeforeUnmount(() => {
         type="button"
         class="decision-button decision-approve"
         :class="{ selected: currentDecision?.result === '通过' }"
+        :disabled="decisionSyncState === 'saving'"
         @click="saveDecision('通过')"
       >
         <span>✓</span>
@@ -991,7 +1386,13 @@ onBeforeUnmount(() => {
         <span class="decision-symbol">{{ revealResult === '通过' ? '✓' : '×' }}</span>
         <strong>{{ revealResult }}</strong>
         <small>
-          {{ reviewedCount === records.length ? '全部完成 · 结果已自动导出' : '结果已保存到本机' }}
+          {{
+            current.remote
+              ? '结果已同步到飞书'
+              : reviewedCount === records.length
+                ? '全部完成 · 结果已自动导出'
+                : '结果已保存到本机'
+          }}
         </small>
       </div>
     </template>
