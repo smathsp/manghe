@@ -199,6 +199,7 @@ const feishuMessage = ref('')
 const feishuResults = ref([])
 const decisionSyncState = ref('idle')
 const decisionSyncMessage = ref('')
+const reviewNote = ref('')
 const records = ref([])
 const currentIndex = ref(0)
 const zipArchive = ref(null)
@@ -332,6 +333,7 @@ function buildRecord(row, index) {
       : normalizeText(row['提交时间']) || '时间未知',
     remote: Boolean(row._remote),
     recordId: normalizeText(row._recordId),
+    reviewNote: normalizeText(row['直播筛选备注']),
     trafficCard: buildTrafficCard(row),
     groups: GROUPS.map((group) => ({
       ...group,
@@ -602,6 +604,7 @@ async function openFeishuRecord(summary) {
     autoExported.value = false
     decisionSyncState.value = 'idle'
     decisionSyncMessage.value = ''
+    reviewNote.value = built.reviewNote
 
     const previousResult = normalizeText(row['直播筛选结果'])
     decisions.value = previousResult
@@ -609,6 +612,7 @@ async function openFeishuRecord(summary) {
           [built.id]: {
             result: previousResult,
             time: formatFeishuTime(row['直播筛选时间']),
+            note: built.reviewNote,
           },
         }
       : {}
@@ -783,6 +787,7 @@ async function importBatch() {
     })
 
     records.value = builtRecords
+    reviewNote.value = builtRecords[0]?.reviewNote || ''
     zipArchive.value = zip
     attachmentIndex.value = index
     validation.value = {
@@ -804,6 +809,9 @@ async function importBatch() {
       .trim() || '天火卡申请名单'
     autoExported.value = false
     decisions.value = loadSavedDecisions(batchStorageKey.value)
+    reviewNote.value = decisions.value[builtRecords[0]?.id]?.note
+      ?? builtRecords[0]?.reviewNote
+      ?? ''
     importState.value = 'ready'
     importMessage.value = `已从 ${csvSourceName} 载入 ${builtRecords.length} 条记录`
     await nextTick()
@@ -832,6 +840,7 @@ async function showRecord(index) {
   lightboxImage.value = null
   revealResult.value = null
   currentImages.value = new Map()
+  reviewNote.value = decisions.value[current.value.id]?.note ?? current.value.reviewNote ?? ''
   document.querySelector('.screening-content')?.scrollTo({ top: 0, behavior: 'smooth' })
   await loadCurrentImages()
 }
@@ -849,6 +858,7 @@ async function saveDecision(decision) {
 
   const now = new Date()
   const record = current.value
+  const note = normalizeText(reviewNote.value).slice(0, 500)
 
   if (record.remote) {
     decisionSyncState.value = 'saving'
@@ -857,6 +867,7 @@ async function saveDecision(decision) {
       const data = await feishuRequest('/api/feishu/review', {
         recordId: record.recordId,
         result: decision,
+        note,
       })
       now.setTime(Number(data.review_time) || Date.now())
       decisionSyncState.value = 'success'
@@ -873,6 +884,7 @@ async function saveDecision(decision) {
     [record.id]: {
       result: decision,
       time: now.toLocaleString('zh-CN', { hour12: false }),
+      note,
     },
   }
   decisions.value = updatedDecisions
@@ -931,12 +943,13 @@ function exportResults(decisionSource = decisions.value) {
       record.nickname,
       decisionSource[record.id].result,
       decisionSource[record.id].time,
+      decisionSource[record.id].note || '',
     ])
 
   if (!rows.length) return
 
   const csv = [
-    ['编号', '微信注册手机号', '昵称', '直播筛选结果', '直播筛选时间'],
+    ['编号', '微信注册手机号', '昵称', '直播筛选结果', '直播筛选时间', '直播筛选备注'],
     ...rows,
   ].map((row) => row.map(csvEscape).join(',')).join('\r\n')
 
@@ -970,6 +983,7 @@ function resetBatch() {
   autoExported.value = false
   lightboxImage.value = null
   revealResult.value = null
+  reviewNote.value = ''
   decisionSyncState.value = 'idle'
   decisionSyncMessage.value = ''
   if (bundleInput.value) bundleInput.value.value = ''
@@ -1368,6 +1382,20 @@ onBeforeUnmount(() => {
           </section>
         </div>
       </div>
+
+      <label class="review-note-panel">
+        <span>
+          <strong>直播筛选备注</strong>
+          <small>通过与不通过均会提交</small>
+        </span>
+        <textarea
+          v-model="reviewNote"
+          maxlength="500"
+          :disabled="decisionSyncState === 'saving'"
+          placeholder="填写本次审核说明（可选）"
+        ></textarea>
+        <em>{{ reviewNote.length }} / 500</em>
+      </label>
 
       <div
         v-if="decisionSyncMessage"

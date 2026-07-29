@@ -277,9 +277,11 @@ async function getRecord(token, recordId) {
   return payload.data?.record
 }
 
-async function updateReview(token, recordId, result) {
+async function updateReview(token, recordId, result, rawNote) {
   if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
   if (!['通过', '不通过'].includes(result)) throw new Error('审核结果只能是“通过”或“不通过”')
+  const note = String(rawNote || '').trim()
+  if (note.length > 500) throw new Error('直播筛选备注不能超过 500 个字符')
 
   const reviewTime = Date.now()
   const payload = await feishuJson(
@@ -291,6 +293,7 @@ async function updateReview(token, recordId, result) {
         fields: {
           直播筛选结果: result,
           直播筛选时间: reviewTime,
+          直播筛选备注: note,
         },
       },
     },
@@ -299,6 +302,7 @@ async function updateReview(token, recordId, result) {
   return {
     record_id: recordId,
     result,
+    note,
     review_time: reviewTime,
     record: payload.data?.record,
   }
@@ -409,6 +413,7 @@ export async function handleApi(req, res, credentialDefaults = {}) {
         token,
         String(body.recordId || ''),
         String(body.result || '').trim(),
+        body.note,
       )
       sendJson(res, 200, data)
       return
