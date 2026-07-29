@@ -18,6 +18,7 @@ const ATTACHMENT_FIELDS = [
 const TRAFFIC_CARD_DETAIL_FIELD = '请列出流量卡的累计充值金额，并提供ICCID。'
 const STANDARDIZED_ICCID_FIELD = 'ICCID标准化'
 const IMAGE_REVEAL_GAP_MS = 220
+const SEARCH_RESULT_CACHE_TTL_MS = 60 * 1000
 
 const GROUPS = [
   {
@@ -222,6 +223,7 @@ let nextPrefetchVersion = 0
 let nextRecordPrefetch = null
 const remoteImageCache = new Map()
 const remoteAttachmentDownloadCache = new Map()
+const feishuSearchCache = new Map()
 
 const current = computed(() => records.value[currentIndex.value] || null)
 const reviewedCount = computed(() => Object.keys(decisions.value).length)
@@ -679,6 +681,17 @@ async function searchFeishu() {
     return
   }
 
+  const searchKey = normalizeText(feishuQuery.value).toLowerCase()
+  const cachedSearch = feishuSearchCache.get(searchKey)
+  if (cachedSearch?.expiresAt > Date.now()) {
+    feishuResults.value = cachedSearch.records
+    feishuSearchState.value = 'ready'
+    feishuMessage.value = cachedSearch.records.length
+      ? `从缓存找到 ${cachedSearch.records.length} 条匹配记录`
+      : '没有找到匹配记录，请换编号、手机号或昵称重试'
+    return
+  }
+
   feishuSearchState.value = 'loading'
   feishuMessage.value = '正在读取飞书真实记录…'
   feishuResults.value = []
@@ -686,6 +699,10 @@ async function searchFeishu() {
   try {
     const data = await feishuRequest('/api/feishu/search', { query: feishuQuery.value })
     feishuResults.value = data.records || []
+    feishuSearchCache.set(searchKey, {
+      records: feishuResults.value,
+      expiresAt: Date.now() + SEARCH_RESULT_CACHE_TTL_MS,
+    })
     feishuSearchState.value = 'ready'
     feishuMessage.value = feishuResults.value.length
       ? `找到 ${feishuResults.value.length} 条匹配记录，请选择要审核的人`
@@ -1159,6 +1176,7 @@ async function saveDecision(decision) {
         note,
       })
       now.setTime(Number(data.review_time) || Date.now())
+      feishuSearchCache.clear()
       decisionSyncState.value = 'success'
       decisionSyncMessage.value = `已同步到飞书：${decision} · ${now.toLocaleString('zh-CN', { hour12: false })}`
     } catch (error) {
