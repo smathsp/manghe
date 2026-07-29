@@ -432,6 +432,19 @@ function questionImages(question) {
   return currentImages.value.get(question.evidence.field) || []
 }
 
+function questionExpectedImageCount(question) {
+  if (!question.evidence || !current.value) return 0
+  if (current.value.remote) {
+    return remoteAttachments(current.value.row[question.evidence.field]).length
+  }
+  return attachmentEntries(question.evidence.field, current.value.id).length
+}
+
+function questionImagesLoading(question) {
+  return imageLoading.value
+    && questionImages(question).length < questionExpectedImageCount(question)
+}
+
 function compactQuestions(group) {
   return group.questions.filter((question) => question.compact && !question.evidence)
 }
@@ -786,6 +799,11 @@ async function loadCurrentImages() {
   if (!record.remote) revokeObjectUrls()
 
   const imageMap = new Map()
+  const visibleAttachmentFields = record.groups.flatMap((group) => (
+    group.questions
+      .filter((question) => question.evidence && shouldShowEvidence(question.answer))
+      .map((question) => question.evidence.field)
+  ))
 
   if (record.remote) {
     const cachedImages = remoteImageCache.get(record.recordId)
@@ -797,7 +815,7 @@ async function loadCurrentImages() {
       return
     }
 
-    const tasks = ATTACHMENT_FIELDS.flatMap((field) => (
+    const tasks = visibleAttachmentFields.flatMap((field) => (
       remoteAttachments(record.row[field]).map((entry) => ({ field, entry }))
     ))
     const results = new Array(tasks.length)
@@ -825,6 +843,14 @@ async function loadCurrentImages() {
             field,
             image: { src: url, filename: entry.filename, label: field },
           }
+
+          // 每完成一张就替换 Map，触发 Vue 立即显示已加载原图。
+          const progressiveImages = results
+            .filter((result) => result?.field === field)
+            .map((result) => result.image)
+          const progressiveMap = new Map(currentImages.value)
+          progressiveMap.set(field, progressiveImages)
+          currentImages.value = progressiveMap
         } catch (error) {
           failedImages += 1
           lastImageError = error?.message || '请检查附件权限'
@@ -832,9 +858,8 @@ async function loadCurrentImages() {
       }
     }
 
-    await Promise.all(
-      Array.from({ length: Math.min(3, tasks.length) }, () => worker()),
-    )
+    // 严格按照页面题目与附件顺序逐张读取；每张完成后立即渲染。
+    await worker()
     if (token !== imageLoadToken) return
 
     for (const result of results.filter(Boolean)) {
@@ -861,7 +886,7 @@ async function loadCurrentImages() {
     return
   }
 
-  for (const field of ATTACHMENT_FIELDS) {
+  for (const field of visibleAttachmentFields) {
     const entries = attachmentEntries(field, record.id)
     const images = []
 
@@ -878,6 +903,8 @@ async function loadCurrentImages() {
         filename: entry.filename,
         label: field,
       })
+      imageMap.set(field, [...images])
+      currentImages.value = new Map(imageMap)
     }
 
     if (images.length) imageMap.set(field, images)
@@ -1573,17 +1600,13 @@ onBeforeUnmount(() => {
                       <small>ORIGINAL IMAGE</small>
                       <h3>{{ question.evidence.question }}</h3>
                     </div>
-                    <em v-if="questionImages(question).length">
-                      {{ questionImages(question).length }} 张原图
+                    <em v-if="questionExpectedImageCount(question)">
+                      {{ questionImages(question).length }}
+                      / {{ questionExpectedImageCount(question) }} 张原图
                     </em>
                   </header>
 
-                  <div v-if="imageLoading" class="image-loading">
-                    <span class="spinner"></span>
-                    正在读取原图
-                  </div>
-
-                  <div v-else-if="questionImages(question).length" class="evidence-images">
+                  <div v-if="questionImages(question).length" class="evidence-images">
                     <figure
                       v-for="(image, imageIndex) in questionImages(question)"
                       :key="image.src"
@@ -1597,7 +1620,17 @@ onBeforeUnmount(() => {
                     </figure>
                   </div>
 
-                  <div v-else class="no-evidence">本题未提供附件</div>
+                  <div v-if="questionImagesLoading(question)" class="image-loading">
+                    <span class="spinner"></span>
+                    正在按题目顺序读取原图
+                  </div>
+
+                  <div
+                    v-else-if="!questionImages(question).length"
+                    class="no-evidence"
+                  >
+                    本题未提供附件
+                  </div>
                 </template>
               </article>
             </div>
