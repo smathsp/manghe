@@ -2,7 +2,10 @@ const FEISHU_ORIGIN = 'https://open.feishu.cn'
 const BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf'
 const TABLE_ID = 'tblVnUXJQUgpjcMi'
 const MAX_BODY_BYTES = 32 * 1024
+const SEARCH_CACHE_TTL_MS = 30 * 1000
 let tenantTokenCache = null
+let searchIndexCache = null
+let searchIndexPromise = null
 
 const SEARCH_FIELDS = [
   '编号',
@@ -196,19 +199,16 @@ function scoreRecord(record, query) {
   return exact ? 3 : starts ? 2 : contains ? 1 : 0
 }
 
-async function searchRecords(token, rawQuery) {
-  const query = normalizeSearch(rawQuery)
-  if (!query || query.length > 100) throw new Error('请输入 1–100 个字符进行搜索')
-
-  const matches = []
+async function listSearchRecords(token, extraParams = {}) {
+  const records = []
   let pageToken = ''
   let pageCount = 0
 
   do {
     const params = new URLSearchParams({
       page_size: '500',
-      automatic_fields: 'true',
       field_names: JSON.stringify(SEARCH_FIELDS),
+      ...extraParams,
     })
     if (pageToken) params.set('page_token', pageToken)
 
@@ -216,16 +216,93 @@ async function searchRecords(token, rawQuery) {
       `/open-apis/bitable/v1/apps/${BASE_TOKEN}/tables/${TABLE_ID}/records?${params}`,
       { token },
     )
-    const items = payload.data?.items || []
-    for (const record of items) {
-      if (isOldDuplicateRecord(record)) continue
-      const score = scoreRecord(record, query)
-      if (score) matches.push({ ...recordSummary(record), _score: score })
-    }
+    records.push(...(payload.data?.items || []))
 
     pageToken = payload.data?.has_more ? payload.data?.page_token || '' : ''
     pageCount += 1
   } while (pageToken && pageCount < 20)
+
+  return records
+}
+
+async function cachedSearchIndex(token) {
+  if (searchIndexCache?.expiresAt > Date.now()) return searchIndexCache.records
+  if (searchIndexPromise) return searchIndexPromise
+
+  searchIndexPromise = listSearchRecords(token)
+    .then((records) => {
+      searchIndexCache = {
+        records,
+        expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+      }
+      return records
+    })
+    .finally(() => {
+      searchIndexPromise = null
+    })
+  return searchIndexPromise
+}
+
+async function focusedSearchRecords(token, rawQuery, query) {
+  if (/^\d{1,6}$/.test(query)) {
+    return listSearchRecords(token, {
+      page_size: '100',
+      filter: `CurrentValue.[编号]=${Number(query)}`,
+    })
+  }
+
+  if (/^1[3-9]\d{9}$/.test(query)) {
+    return listSearchRecords(token, {
+      page_size: '100',
+      filter: `CurrentValue.[你的微信注册手机号]="${query}"`,
+    })
+  }
+
+  const conditions = [
+    '你的微信号【微信昵称】',
+    '你的抖音昵称',
+    '你的抖音号id号',
+  ].map((fieldName) => ({
+    field_name: fieldName,
+    operator: 'contains',
+    value: [String(rawQuery).trim()],
+  }))
+  const records = []
+  let pageToken = ''
+  let pageCount = 0
+
+  do {
+    const params = new URLSearchParams({ page_size: '100' })
+    if (pageToken) params.set('page_token', pageToken)
+    const payload = await feishuJson(
+      `/open-apis/bitable/v1/apps/${BASE_TOKEN}/tables/${TABLE_ID}/records/search?${params}`,
+      {
+        token,
+        method: 'POST',
+        body: {
+          field_names: SEARCH_FIELDS,
+          filter: {
+            conjunction: 'or',
+            conditions,
+          },
+        },
+      },
+    )
+    records.push(...(payload.data?.items || []))
+    pageToken = payload.data?.has_more ? payload.data?.page_token || '' : ''
+    pageCount += 1
+  } while (pageToken && pageCount < 5)
+
+  return records
+}
+
+function finalizeSearchRecords(records, query) {
+  const matches = []
+  for (const record of records) {
+    if (isOldDuplicateRecord(record)) continue
+    const score = scoreRecord(record, query)
+    if (score) matches.push({ ...recordSummary(record), _score: score })
+  }
 
   const seenPhones = new Set()
   return matches
@@ -242,6 +319,22 @@ async function searchRecords(token, rawQuery) {
     })
     .slice(0, 20)
     .map(({ _score, ...record }) => record)
+}
+
+async function searchRecords(token, rawQuery) {
+  const query = normalizeSearch(rawQuery)
+  if (!query || query.length > 100) throw new Error('请输入 1–100 个字符进行搜索')
+
+  try {
+    const focused = await focusedSearchRecords(token, rawQuery, query)
+    return finalizeSearchRecords(focused, query)
+  } catch (error) {
+    if (![1254000, 1254001, 1254002, 1254010, 1254018, 1254024, 1254045].includes(error?.code)) {
+      throw error
+    }
+    const cached = await cachedSearchIndex(token)
+    return finalizeSearchRecords(cached, query)
+  }
 }
 
 async function nextUnreviewedRecord(token, rawAfterNumber) {
