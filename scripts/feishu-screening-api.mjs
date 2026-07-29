@@ -178,6 +178,15 @@ function recordSummary(record) {
   }
 }
 
+function isOldDuplicateRecord(record) {
+  const fields = record.fields || {}
+  return [
+    fields['手机号重复'],
+    fields['MAC重复'],
+    fields['初筛状态'],
+  ].some((value) => /重复[·・\s_-]*旧记录|旧记录/.test(normalizeValue(value)))
+}
+
 function scoreRecord(record, query) {
   const fields = record.fields || {}
   const values = SEARCH_FIELDS.slice(0, 5).map((field) => normalizeSearch(fields[field]))
@@ -209,6 +218,7 @@ async function searchRecords(token, rawQuery) {
     )
     const items = payload.data?.items || []
     for (const record of items) {
+      if (isOldDuplicateRecord(record)) continue
       const score = scoreRecord(record, query)
       if (score) matches.push({ ...recordSummary(record), _score: score })
     }
@@ -217,13 +227,18 @@ async function searchRecords(token, rawQuery) {
     pageCount += 1
   } while (pageToken && pageCount < 20)
 
+  const seenPhones = new Set()
   return matches
     .sort((a, b) => {
       if (b._score !== a._score) return b._score - a._score
-      const aOld = normalizeValue(a.fields['初筛状态']).includes('重复·旧记录')
-      const bOld = normalizeValue(b.fields['初筛状态']).includes('重复·旧记录')
-      if (aOld !== bOld) return Number(aOld) - Number(bOld)
       return Number(normalizeValue(b.fields['编号'])) - Number(normalizeValue(a.fields['编号']))
+    })
+    .filter((record) => {
+      const phone = normalizeSearch(record.fields['你的微信注册手机号'])
+      if (!phone) return true
+      if (seenPhones.has(phone)) return false
+      seenPhones.add(phone)
+      return true
     })
     .slice(0, 20)
     .map(({ _score, ...record }) => record)
@@ -260,6 +275,7 @@ async function nextUnreviewedRecord(token, rawAfterNumber) {
     )
 
     for (const record of payload.data?.items || []) {
+      if (isOldDuplicateRecord(record)) continue
       const status = normalizeValue(record.fields?.['初筛状态'])
       const result = normalizeValue(record.fields?.['直播筛选结果'])
       if (result) continue

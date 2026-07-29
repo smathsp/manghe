@@ -358,6 +358,14 @@ function buildRecord(row, index) {
   }
 }
 
+function isOldDuplicateRow(row) {
+  return [
+    row['手机号重复'],
+    row['MAC重复'],
+    row['初筛状态'],
+  ].some((value) => /重复[·・\s_-]*旧记录|旧记录/.test(normalizeText(value)))
+}
+
 function parseCsv(source) {
   return new Promise((resolve, reject) => {
     Papa.parse(source, {
@@ -970,9 +978,14 @@ async function importBatch() {
     if (!fields.includes('编号')) throw new Error('CSV 中没有找到“编号”字段')
     if (!data.length) throw new Error('CSV 中没有可用记录')
 
-    const builtRecords = data
-      .filter((row) => normalizeText(row['编号']))
+    const numberedRows = data.filter((row) => normalizeText(row['编号']))
+    const duplicateFilteredCount = numberedRows.filter(isOldDuplicateRow).length
+    const builtRecords = numberedRows
+      .filter((row) => !isOldDuplicateRow(row))
       .map(buildRecord)
+    if (!builtRecords.length) {
+      throw new Error('过滤重复旧记录后没有可审核记录')
+    }
 
     const ids = builtRecords.map((record) => record.id)
     const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
@@ -1022,7 +1035,9 @@ async function importBatch() {
       ?? builtRecords[0]?.reviewNote
       ?? ''
     importState.value = 'ready'
-    importMessage.value = `已从 ${csvSourceName} 载入 ${builtRecords.length} 条记录`
+    importMessage.value = `已从 ${csvSourceName} 载入 ${builtRecords.length} 条记录${
+      duplicateFilteredCount ? `，已过滤 ${duplicateFilteredCount} 条重复旧记录` : ''
+    }`
     await nextTick()
     await loadCurrentImages()
   } catch (error) {
