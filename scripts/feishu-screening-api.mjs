@@ -24,6 +24,17 @@ function sendJson(res, status, data) {
 }
 
 async function readJson(req) {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    return req.body
+  }
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body || '{}')
+    } catch {
+      throw new Error('请求格式不正确')
+    }
+  }
+
   const chunks = []
   let size = 0
 
@@ -40,12 +51,35 @@ async function readJson(req) {
   }
 }
 
-function validateCredentials(body) {
-  const appId = String(body.appId || '').trim()
-  const appSecret = String(body.appSecret || '').trim()
+function validateCredentials(body, credentialDefaults = {}) {
+  const appId = String(body.appId || credentialDefaults.appId || '').trim()
+  const appSecret = String(body.appSecret || credentialDefaults.appSecret || '').trim()
   if (!/^cli_[a-z0-9]+$/i.test(appId)) throw new Error('App ID 格式不正确，应以 cli_ 开头')
   if (appSecret.length < 8 || appSecret.length > 256) throw new Error('请填写正确的 App Secret')
   return { appId, appSecret }
+}
+
+function validateAccessKey(body, credentialDefaults = {}) {
+  if (!credentialDefaults.requireAccessKey) return
+
+  const expected = String(credentialDefaults.accessKey || '')
+  if (expected.length < 12) {
+    const error = new Error('Vercel 尚未配置安全的 SCREENING_ACCESS_KEY')
+    error.status = 500
+    throw error
+  }
+
+  const provided = String(body.accessKey || '')
+  let mismatch = expected.length === provided.length ? 0 : 1
+  const compareLength = Math.max(expected.length, provided.length)
+  for (let index = 0; index < compareLength; index += 1) {
+    mismatch |= (expected.charCodeAt(index) || 0) ^ (provided.charCodeAt(index) || 0)
+  }
+  if (mismatch !== 0) {
+    const error = new Error('审核访问口令不正确')
+    error.status = 401
+    throw error
+  }
 }
 
 function normalizeValue(value) {
@@ -339,31 +373,38 @@ const ATTACHMENT_FIELD_NAMES = new Set([
   '请提供张导的店会员等级截图',
 ])
 
-async function handleApi(req, res) {
+export async function handleApi(req, res, credentialDefaults = {}) {
   try {
-    const body = await readJson(req)
-    const { appId, appSecret } = validateCredentials(body)
-    const token = await getTenantToken(appId, appSecret)
+    if (req.method !== 'POST') {
+      sendJson(res, 405, { message: '只支持 POST 请求' })
+      return
+    }
 
-    if (req.url === '/api/feishu/search') {
+    const body = await readJson(req)
+    validateAccessKey(body, credentialDefaults)
+    const { appId, appSecret } = validateCredentials(body, credentialDefaults)
+    const token = await getTenantToken(appId, appSecret)
+    const pathname = new URL(req.url || '/', 'http://localhost').pathname
+
+    if (pathname === '/api/feishu/search') {
       const records = await searchRecords(token, body.query)
       sendJson(res, 200, { records })
       return
     }
 
-    if (req.url === '/api/feishu/record') {
+    if (pathname === '/api/feishu/record') {
       const record = await getRecord(token, String(body.recordId || ''))
       sendJson(res, 200, { record })
       return
     }
 
-    if (req.url === '/api/feishu/next') {
+    if (pathname === '/api/feishu/next') {
       const record = await nextUnreviewedRecord(token, body.afterNumber)
       sendJson(res, 200, { record })
       return
     }
 
-    if (req.url === '/api/feishu/review') {
+    if (pathname === '/api/feishu/review') {
       const data = await updateReview(
         token,
         String(body.recordId || ''),
@@ -373,7 +414,7 @@ async function handleApi(req, res) {
       return
     }
 
-    if (req.url === '/api/feishu/attachment') {
+    if (pathname === '/api/feishu/attachment') {
       const attachment = await downloadAttachment(
         token,
         String(body.recordId || ''),

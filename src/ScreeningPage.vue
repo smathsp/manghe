@@ -188,9 +188,11 @@ const zipFile = ref(null)
 const needsSeparateCsv = ref(false)
 const importState = ref('idle')
 const importMessage = ref('')
+const isPublicDeployment = !['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 const sourceMode = ref('feishu')
 const feishuAppId = ref('')
 const feishuAppSecret = ref('')
+const publicAccessKey = ref('')
 const feishuQuery = ref('')
 const feishuSearchState = ref('idle')
 const feishuMessage = ref('')
@@ -458,6 +460,7 @@ async function feishuRequest(path, payload = {}, { blob = false } = {}) {
     body: JSON.stringify({
       appId: feishuAppId.value.trim(),
       appSecret: feishuAppSecret.value.trim(),
+      accessKey: publicAccessKey.value,
       ...payload,
     }),
   })
@@ -472,9 +475,14 @@ async function feishuRequest(path, payload = {}, { blob = false } = {}) {
 
 async function searchFeishu() {
   if (feishuSearchState.value === 'loading') return
-  if (!feishuAppId.value.trim() || !feishuAppSecret.value.trim()) {
+  if (!isPublicDeployment && (!feishuAppId.value.trim() || !feishuAppSecret.value.trim())) {
     feishuSearchState.value = 'error'
     feishuMessage.value = '请先填写 App ID 和 App Secret'
+    return
+  }
+  if (isPublicDeployment && !publicAccessKey.value) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = '请输入审核访问口令'
     return
   }
   if (!feishuQuery.value.trim()) {
@@ -501,9 +509,14 @@ async function searchFeishu() {
 }
 
 async function openNextUnreviewed(afterNumber = '') {
-  if (!feishuAppId.value.trim() || !feishuAppSecret.value.trim()) {
+  if (!isPublicDeployment && (!feishuAppId.value.trim() || !feishuAppSecret.value.trim())) {
     feishuSearchState.value = 'error'
     feishuMessage.value = '请先填写 App ID 和 App Secret'
+    return
+  }
+  if (isPublicDeployment && !publicAccessKey.value) {
+    feishuSearchState.value = 'error'
+    feishuMessage.value = '请输入审核访问口令'
     return
   }
   if (feishuSearchState.value === 'opening') return
@@ -1007,7 +1020,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="sourceMode === 'feishu'" class="feishu-connect-panel">
-        <div class="credential-grid">
+        <div v-if="!isPublicDeployment" class="credential-grid">
           <label>
             <span>App ID</span>
             <input
@@ -1030,9 +1043,22 @@ onBeforeUnmount(() => {
           </label>
         </div>
 
-        <p class="credential-note">
+        <p v-if="!isPublicDeployment" class="credential-note">
           凭据仅保留在当前打开的页面内；搜索范围为公开问卷全表，不受飞书视图筛选限制。
         </p>
+        <p v-else class="credential-note server-credential-note">
+          已启用 Vercel 安全凭据模式；App Secret 仅从服务端环境变量读取，不会进入浏览器。
+        </p>
+
+        <label v-if="isPublicDeployment" class="public-access-field">
+          <span>审核访问口令</span>
+          <input
+            v-model="publicAccessKey"
+            type="password"
+            autocomplete="current-password"
+            placeholder="输入 Vercel 中设置的 SCREENING_ACCESS_KEY"
+          >
+        </label>
 
         <form class="feishu-search-bar" @submit.prevent="searchFeishu">
           <input

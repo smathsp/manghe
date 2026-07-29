@@ -1207,6 +1207,46 @@ button {
   font-size: 11px;
 }
 
+.server-credential-note {
+  margin-top: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(76, 190, 126, 0.22);
+  border-radius: 12px;
+  color: #8fd4ac;
+  background: rgba(28, 104, 62, 0.12);
+}
+
+.public-access-field {
+  display: flex;
+  margin: 0 0 14px;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.public-access-field span {
+  color: #82a392;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.public-access-field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(99, 168, 132, 0.24);
+  border-radius: 13px;
+  outline: none;
+  color: #e7f5ed;
+  background: rgba(3, 19, 12, 0.75);
+}
+
+.public-access-field input:focus {
+  border-color: rgba(86, 206, 141, 0.6);
+  box-shadow: 0 0 0 3px rgba(65, 179, 115, 0.1);
+}
+
 .feishu-search-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 116px 148px;
