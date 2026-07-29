@@ -199,6 +199,7 @@ const feishuMessage = ref('')
 const feishuResults = ref([])
 const decisionSyncState = ref('idle')
 const decisionSyncMessage = ref('')
+const nextPrefetchState = ref('idle')
 const reviewNote = ref('')
 const records = ref([])
 const currentIndex = ref(0)
@@ -216,6 +217,8 @@ const validation = ref({ attachments: 0, missing: 0, multiple: 0 })
 let decisionTimer
 let imageLoadToken = 0
 let objectUrls = []
+let nextPrefetchVersion = 0
+let nextRecordPrefetch = null
 
 const current = computed(() => records.value[currentIndex.value] || null)
 const reviewedCount = computed(() => Object.keys(decisions.value).length)
@@ -225,6 +228,12 @@ const progressPercent = computed(() => (
 const currentDecision = computed(() => (
   current.value ? decisions.value[current.value.id] : null
 ))
+const nextPrefetchLabel = computed(() => ({
+  loading: '下一位预载中',
+  ready: '下一位已预载',
+  complete: '已预载到队尾',
+  error: '下一位将按需加载',
+}[nextPrefetchState.value] || ''))
 
 function normalizeText(value) {
   if (Array.isArray(value)) return value.map(normalizeText).filter(Boolean).join('\n')
@@ -455,6 +464,12 @@ function remoteAttachments(value) {
     .filter((item) => item.fileToken)
 }
 
+function cancelNextPrefetch() {
+  nextPrefetchVersion += 1
+  nextRecordPrefetch = null
+  nextPrefetchState.value = 'idle'
+}
+
 async function feishuRequest(path, payload = {}, { blob = false } = {}) {
   const response = await fetch(path, {
     method: 'POST',
@@ -473,6 +488,64 @@ async function feishuRequest(path, payload = {}, { blob = false } = {}) {
   }
 
   return blob ? response.blob() : response.json()
+}
+
+async function fetchFeishuRecord(summary) {
+  const data = await feishuRequest('/api/feishu/record', {
+    recordId: summary.record_id,
+  })
+  if (!data.record) throw new Error('飞书没有返回该条记录')
+  return data.record
+}
+
+function startNextRecordPrefetch(record) {
+  if (!record?.remote) {
+    cancelNextPrefetch()
+    return
+  }
+
+  const version = ++nextPrefetchVersion
+  const fromNumber = normalizeText(record.id)
+  nextPrefetchState.value = 'loading'
+
+  const promise = (async () => {
+    const data = await feishuRequest('/api/feishu/next', { afterNumber: fromNumber })
+    if (!data.record) return null
+    return fetchFeishuRecord(data.record)
+  })()
+
+  nextRecordPrefetch = { version, fromNumber, promise }
+  promise
+    .then((nextRecord) => {
+      if (nextRecordPrefetch?.version !== version) return
+      nextPrefetchState.value = nextRecord ? 'ready' : 'complete'
+    })
+    .catch(() => {
+      if (nextRecordPrefetch?.version !== version) return
+      nextPrefetchState.value = 'error'
+    })
+}
+
+async function consumeNextRecordPrefetch(afterNumber) {
+  const cached = nextRecordPrefetch
+  if (!cached || cached.fromNumber !== normalizeText(afterNumber)) {
+    return { matched: false, record: null }
+  }
+
+  try {
+    const record = await cached.promise
+    if (nextRecordPrefetch?.version === cached.version) {
+      nextRecordPrefetch = null
+      nextPrefetchState.value = 'idle'
+    }
+    return { matched: true, record }
+  } catch {
+    if (nextRecordPrefetch?.version === cached.version) {
+      nextRecordPrefetch = null
+      nextPrefetchState.value = 'error'
+    }
+    return { matched: false, record: null }
+  }
 }
 
 async function searchFeishu() {
@@ -532,6 +605,23 @@ async function openNextUnreviewed(afterNumber = '') {
   }
 
   try {
+    const prefetched = await consumeNextRecordPrefetch(afterNumber)
+    if (prefetched.matched) {
+      if (!prefetched.record) {
+        feishuSearchState.value = 'ready'
+        if (current.value) {
+          decisionSyncState.value = 'success'
+          decisionSyncMessage.value = '全部未审核记录已处理完成'
+        } else {
+          feishuMessage.value = '没有找到符合初筛条件的未审核记录'
+        }
+        return
+      }
+
+      await activateFeishuRecord(prefetched.record)
+      return
+    }
+
     const data = await feishuRequest('/api/feishu/next', { afterNumber })
     if (!data.record) {
       feishuSearchState.value = 'ready'
@@ -585,50 +675,56 @@ function summarizeRemoteValidation(record) {
   return { attachments, missing, multiple }
 }
 
+async function activateFeishuRecord(feishuRecord) {
+  const row = {
+    ...(feishuRecord.fields || {}),
+    _remote: true,
+    _recordId: feishuRecord.record_id,
+    _createdTime: feishuRecord.created_time,
+  }
+  const built = buildRecord(row, 0)
+  records.value = [built]
+  currentIndex.value = 0
+  zipArchive.value = null
+  batchStorageKey.value = ''
+  batchName.value = '飞书实时审核'
+  autoExported.value = false
+  decisionSyncState.value = 'idle'
+  decisionSyncMessage.value = ''
+  reviewNote.value = built.reviewNote
+  lightboxImage.value = null
+  revealResult.value = null
+  currentImages.value = new Map()
+
+  const previousResult = normalizeText(row['直播筛选结果'])
+  decisions.value = previousResult
+    ? {
+        [built.id]: {
+          result: previousResult,
+          time: formatFeishuTime(row['直播筛选时间']),
+          note: built.reviewNote,
+        },
+      }
+    : {}
+
+  validation.value = summarizeRemoteValidation(built)
+  feishuSearchState.value = 'ready'
+  feishuMessage.value = ''
+  await nextTick()
+
+  // 审核员查看当前问答和图片时，在后台准备下一位的完整记录。
+  startNextRecordPrefetch(built)
+  await loadCurrentImages()
+}
+
 async function openFeishuRecord(summary) {
   if (feishuSearchState.value === 'opening') return
   feishuSearchState.value = 'opening'
   feishuMessage.value = '正在载入完整问答和原图…'
 
   try {
-    const data = await feishuRequest('/api/feishu/record', {
-      recordId: summary.record_id,
-    })
-    if (!data.record) throw new Error('飞书没有返回该条记录')
-
-    const row = {
-      ...(data.record.fields || {}),
-      _remote: true,
-      _recordId: data.record.record_id,
-      _createdTime: data.record.created_time,
-    }
-    const built = buildRecord(row, 0)
-    records.value = [built]
-    currentIndex.value = 0
-    zipArchive.value = null
-    batchStorageKey.value = ''
-    batchName.value = '飞书实时审核'
-    autoExported.value = false
-    decisionSyncState.value = 'idle'
-    decisionSyncMessage.value = ''
-    reviewNote.value = built.reviewNote
-
-    const previousResult = normalizeText(row['直播筛选结果'])
-    decisions.value = previousResult
-      ? {
-          [built.id]: {
-            result: previousResult,
-            time: formatFeishuTime(row['直播筛选时间']),
-            note: built.reviewNote,
-          },
-        }
-      : {}
-
-    validation.value = summarizeRemoteValidation(built)
-    feishuSearchState.value = 'ready'
-    feishuMessage.value = ''
-    await nextTick()
-    await loadCurrentImages()
+    const record = await fetchFeishuRecord(summary)
+    await activateFeishuRecord(record)
   } catch (error) {
     feishuSearchState.value = 'error'
     feishuMessage.value = error?.message || '载入飞书记录失败'
@@ -649,12 +745,21 @@ async function loadCurrentImages() {
   const imageMap = new Map()
 
   if (record.remote) {
-    try {
-      for (const field of ATTACHMENT_FIELDS) {
-        const entries = remoteAttachments(record.row[field])
-        const images = []
+    const tasks = ATTACHMENT_FIELDS.flatMap((field) => (
+      remoteAttachments(record.row[field]).map((entry) => ({ field, entry }))
+    ))
+    const results = new Array(tasks.length)
+    let taskCursor = 0
+    let failedImages = 0
+    let lastImageError = ''
 
-        for (const entry of entries) {
+    const worker = async () => {
+      while (taskCursor < tasks.length) {
+        const taskIndex = taskCursor
+        taskCursor += 1
+        const { field, entry } = tasks[taskIndex]
+
+        try {
           const blob = await feishuRequest('/api/feishu/attachment', {
             recordId: record.recordId,
             fieldName: field,
@@ -664,13 +769,30 @@ async function loadCurrentImages() {
 
           const url = URL.createObjectURL(blob)
           objectUrls.push(url)
-          images.push({ src: url, filename: entry.filename, label: field })
+          results[taskIndex] = {
+            field,
+            image: { src: url, filename: entry.filename, label: field },
+          }
+        } catch (error) {
+          failedImages += 1
+          lastImageError = error?.message || '请检查附件权限'
         }
-
-        if (images.length) imageMap.set(field, images)
       }
-    } catch (error) {
-      decisionSyncMessage.value = `部分飞书原图读取失败：${error?.message || '请检查附件权限'}`
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(3, tasks.length) }, () => worker()),
+    )
+    if (token !== imageLoadToken) return
+
+    for (const result of results.filter(Boolean)) {
+      const images = imageMap.get(result.field) || []
+      images.push(result.image)
+      imageMap.set(result.field, images)
+    }
+
+    if (failedImages) {
+      decisionSyncMessage.value = `${failedImages} 张飞书原图读取失败：${lastImageError}`
     }
 
     if (token === imageLoadToken) {
@@ -975,6 +1097,7 @@ function exportResults(decisionSource = decisions.value) {
 function resetBatch() {
   window.clearTimeout(decisionTimer)
   imageLoadToken += 1
+  cancelNextPrefetch()
   revokeObjectUrls()
   records.value = []
   csvFile.value = null
@@ -1003,6 +1126,7 @@ function openEvidence(image) {
 
 onBeforeUnmount(() => {
   window.clearTimeout(decisionTimer)
+  cancelNextPrefetch()
   revokeObjectUrls()
 })
 </script>
@@ -1218,6 +1342,9 @@ onBeforeUnmount(() => {
               <div>
                 <span class="precheck-badge">
                   {{ current.remote ? '飞书实时记录 · 审核结果可同步' : '已通过初筛 · 本地只读审核' }}
+                  <template v-if="current.remote && nextPrefetchLabel">
+                    · {{ nextPrefetchLabel }}
+                  </template>
                 </span>
                 <h1><small>抖音昵称</small>{{ current.nickname }}</h1>
                 <p>

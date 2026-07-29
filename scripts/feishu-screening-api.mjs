@@ -213,7 +213,7 @@ async function searchRecords(token, rawQuery) {
 
 async function nextUnreviewedRecord(token, rawAfterNumber) {
   const afterNumber = Number(normalizeValue(rawAfterNumber))
-  const candidates = []
+  let firstCandidate = null
   let pageToken = ''
   let pageCount = 0
   const fields = [
@@ -229,8 +229,9 @@ async function nextUnreviewedRecord(token, rawAfterNumber) {
 
   do {
     const params = new URLSearchParams({
-      page_size: '500',
-      automatic_fields: 'true',
+      page_size: '100',
+      filter: 'CurrentValue.[直播筛选结果] =""',
+      sort: JSON.stringify(['编号 ASC']),
       field_names: JSON.stringify(fields),
     })
     if (pageToken) params.set('page_token', pageToken)
@@ -245,27 +246,19 @@ async function nextUnreviewedRecord(token, rawAfterNumber) {
       const result = normalizeValue(record.fields?.['直播筛选结果'])
       if (result) continue
       if (/旧记录|未通过|不合格|重复/.test(status)) continue
-      candidates.push(record)
+
+      if (!firstCandidate) firstCandidate = record
+      const number = Number(normalizeValue(record.fields?.['编号']))
+      if (!Number.isFinite(afterNumber) || (Number.isFinite(number) && number > afterNumber)) {
+        return recordSummary(record)
+      }
     }
 
     pageToken = payload.data?.has_more ? payload.data?.page_token || '' : ''
     pageCount += 1
   } while (pageToken && pageCount < 20)
 
-  candidates.sort((a, b) => {
-    const aNumber = Number(normalizeValue(a.fields?.['编号']))
-    const bNumber = Number(normalizeValue(b.fields?.['编号']))
-    const safeA = Number.isFinite(aNumber) ? aNumber : Number.MAX_SAFE_INTEGER
-    const safeB = Number.isFinite(bNumber) ? bNumber : Number.MAX_SAFE_INTEGER
-    return safeA - safeB
-  })
-
-  const next = Number.isFinite(afterNumber)
-    ? candidates.find((record) => Number(normalizeValue(record.fields?.['编号'])) > afterNumber)
-      || candidates[0]
-    : candidates[0]
-
-  return next ? recordSummary(next) : null
+  return firstCandidate ? recordSummary(firstCandidate) : null
 }
 
 async function getRecord(token, recordId) {
