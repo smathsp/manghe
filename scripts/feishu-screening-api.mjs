@@ -448,14 +448,82 @@ function findAttachmentExtra(value, fileToken) {
   return ''
 }
 
-async function downloadAttachment(token, recordId, fieldName, fileToken) {
+function validateFeishuMediaUrl(rawUrl, fileToken, kind) {
+  if (!rawUrl) return ''
+
+  try {
+    const url = new URL(String(rawUrl))
+    if (url.origin !== FEISHU_ORIGIN) return ''
+
+    if (kind === 'temporary') {
+      if (url.pathname !== '/open-apis/drive/v1/medias/batch_get_tmp_download_url') return ''
+      const tokens = url.searchParams.getAll('file_tokens')
+        .flatMap((value) => value.split(','))
+        .map((value) => value.trim())
+      return tokens.includes(fileToken) ? url.toString() : ''
+    }
+
+    const expectedPath = `/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download`
+    return url.pathname === expectedPath ? url.toString() : ''
+  } catch {
+    return ''
+  }
+}
+
+function findTemporaryDownloadUrl(value, fileToken, allowUnscoped = false) {
+  if (!value || typeof value !== 'object') return ''
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findTemporaryDownloadUrl(item, fileToken, allowUnscoped)
+      if (found) return found
+    }
+    return ''
+  }
+
+  const token = String(value.file_token || value.fileToken || value.token || '')
+  const candidate = value.tmp_download_url || value.tmpDownloadUrl || value.download_url || ''
+  if (candidate && (token === fileToken || allowUnscoped)) {
+    try {
+      const url = new URL(String(candidate))
+      if (url.protocol === 'https:') return url.toString()
+    } catch {
+      // Continue searching nested response data.
+    }
+  }
+
+  for (const child of Object.values(value)) {
+    const found = findTemporaryDownloadUrl(child, fileToken, allowUnscoped)
+    if (found) return found
+  }
+  return ''
+}
+
+async function getTemporaryAttachmentUrl(token, fileToken, rawTmpUrl) {
+  const requestUrl = validateFeishuMediaUrl(rawTmpUrl, fileToken, 'temporary')
+  if (!requestUrl) return ''
+
+  const response = await remoteFetch(requestUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || payload.code) {
+    throw friendlyFeishuError(payload, response.ok ? 400 : response.status || 502)
+  }
+
+  return findTemporaryDownloadUrl(payload, fileToken)
+    || findTemporaryDownloadUrl(payload, fileToken, true)
+}
+
+async function downloadAttachment(token, recordId, fieldName, fileToken, rawDownloadUrl) {
   if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
   if (!ATTACHMENT_FIELD_NAMES.has(fieldName)) throw new Error('不支持读取该附件字段')
   if (!fileToken || String(fileToken).length > 256) throw new Error('附件标识不正确')
 
   let extra = ''
+  const providedUrl = validateFeishuMediaUrl(rawDownloadUrl, fileToken, 'download')
   let response = await remoteFetch(
-    `${FEISHU_ORIGIN}/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download`,
+    providedUrl
+      || `${FEISHU_ORIGIN}/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
 
@@ -550,11 +618,33 @@ export async function handleApi(req, res, credentialDefaults = {}) {
         String(body.recordId || ''),
         String(body.fieldName || ''),
         String(body.fileToken || ''),
+        String(body.downloadUrl || ''),
       )
       res.statusCode = 200
       res.setHeader('Content-Type', attachment.headers.get('content-type') || 'application/octet-stream')
       res.setHeader('Cache-Control', 'private, max-age=300')
-      res.end(Buffer.from(await attachment.arrayBuffer()))
+      const contentLength = attachment.headers.get('content-length')
+      if (contentLength) res.setHeader('Content-Length', contentLength)
+      if (!attachment.body) {
+        res.end()
+        return
+      }
+      for await (const chunk of attachment.body) {
+        res.write(Buffer.from(chunk))
+      }
+      res.end()
+      return
+    }
+
+    if (pathname === '/api/feishu/attachment-url') {
+      const fileToken = String(body.fileToken || '')
+      if (!fileToken || fileToken.length > 256) throw new Error('附件标识不正确')
+      const url = await getTemporaryAttachmentUrl(
+        token,
+        fileToken,
+        String(body.tmpUrl || ''),
+      )
+      sendJson(res, 200, { url })
       return
     }
 

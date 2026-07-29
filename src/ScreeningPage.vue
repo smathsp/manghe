@@ -509,6 +509,8 @@ function remoteAttachments(value) {
     .map((item) => ({
       fileToken: normalizeText(item?.file_token ?? item?.fileToken ?? item?.token),
       filename: normalizeText(item?.name ?? item?.file_name) || '飞书原图',
+      tmpUrl: normalizeText(item?.tmp_url ?? item?.tmpUrl),
+      downloadUrl: normalizeText(item?.url ?? item?.download_url ?? item?.downloadUrl),
     }))
     .filter((item) => item.fileToken)
 }
@@ -553,10 +555,26 @@ function prepareRemoteAttachmentDownloads(record) {
       cursor += 1
       const { field, entry } = tasks[taskIndex]
       try {
+        if (entry.tmpUrl) {
+          try {
+            const temporary = await feishuRequest('/api/feishu/attachment-url', {
+              fileToken: entry.fileToken,
+              tmpUrl: entry.tmpUrl,
+            })
+            if (temporary.url) {
+              slots[taskIndex].resolve({ field, entry, url: temporary.url })
+              continue
+            }
+          } catch {
+            // Older records may not provide a usable temporary URL; use the proxy fallback.
+          }
+        }
+
         const blob = await feishuRequest('/api/feishu/attachment', {
           recordId: record.recordId,
           fieldName: field,
           fileToken: entry.fileToken,
+          downloadUrl: entry.downloadUrl,
         }, { blob: true })
         slots[taskIndex].resolve({ field, entry, blob })
       } catch (error) {
@@ -914,8 +932,8 @@ async function loadCurrentImages() {
       }
 
       const { field, entry, blob } = downloaded
-      const url = URL.createObjectURL(blob)
-      objectUrls.push(url)
+      const url = downloaded.url || URL.createObjectURL(blob)
+      if (!downloaded.url) objectUrls.push(url)
       results[taskIndex] = {
         field,
         image: { src: url, filename: entry.filename, label: field },
