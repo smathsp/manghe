@@ -491,6 +491,17 @@ function revokeObjectUrls() {
   remoteAttachmentDownloadCache.clear()
 }
 
+function scrollScreeningToTop() {
+  const content = document.querySelector('.screening-content')
+  if (content) {
+    content.scrollTop = 0
+    content.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }
+  document.documentElement.scrollTop = 0
+  document.body.scrollTop = 0
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+}
+
 function cacheRemoteImages(recordId, imageMap) {
   remoteImageCache.delete(recordId)
   remoteImageCache.set(recordId, imageMap)
@@ -875,6 +886,7 @@ async function activateFeishuRecord(feishuRecord) {
   feishuSearchState.value = 'ready'
   feishuMessage.value = ''
   await nextTick()
+  scrollScreeningToTop()
 
   // 审核员查看当前问答和图片时，在后台准备下一位的完整记录。
   warmReviewEndpoint()
@@ -1163,7 +1175,8 @@ async function showRecord(index) {
       cancelNextPrefetch()
     }
   }
-  document.querySelector('.screening-content')?.scrollTo({ top: 0, behavior: 'smooth' })
+  await nextTick()
+  scrollScreeningToTop()
   await loadCurrentImages()
 }
 
