@@ -17,6 +17,7 @@ const ATTACHMENT_FIELDS = [
 
 const TRAFFIC_CARD_DETAIL_FIELD = '请列出流量卡的累计充值金额，并提供ICCID。'
 const STANDARDIZED_ICCID_FIELD = 'ICCID标准化'
+const IMAGE_REVEAL_GAP_MS = 240
 
 const GROUPS = [
   {
@@ -859,6 +860,9 @@ async function loadCurrentImages() {
           const progressiveMap = new Map(currentImages.value)
           progressiveMap.set(field, progressiveImages)
           currentImages.value = progressiveMap
+          await nextTick()
+          await new Promise((resolve) => window.setTimeout(resolve, IMAGE_REVEAL_GAP_MS))
+          if (token !== imageLoadToken) return
         } catch (error) {
           failedImages += 1
           lastImageError = error?.message || '请检查附件权限'
