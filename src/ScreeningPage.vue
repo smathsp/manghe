@@ -17,7 +17,7 @@ const ATTACHMENT_FIELDS = [
 
 const TRAFFIC_CARD_DETAIL_FIELD = '请列出流量卡的累计充值金额，并提供ICCID。'
 const STANDARDIZED_ICCID_FIELD = 'ICCID标准化'
-const IMAGE_REVEAL_GAP_MS = 600
+const IMAGE_REVEAL_GAP_MS = 220
 
 const GROUPS = [
   {
@@ -828,14 +828,21 @@ async function loadCurrentImages() {
       remoteAttachments(record.row[field]).map((entry) => ({ field, entry }))
     ))
     const results = new Array(tasks.length)
-    let taskCursor = 0
+    const downloadSlots = tasks.map(() => {
+      let resolve
+      const promise = new Promise((slotResolve) => {
+        resolve = slotResolve
+      })
+      return { promise, resolve }
+    })
+    let downloadCursor = 0
     let failedImages = 0
     let lastImageError = ''
 
-    const worker = async () => {
-      while (taskCursor < tasks.length) {
-        const taskIndex = taskCursor
-        taskCursor += 1
+    const downloadWorker = async () => {
+      while (downloadCursor < tasks.length) {
+        const taskIndex = downloadCursor
+        downloadCursor += 1
         const { field, entry } = tasks[taskIndex]
 
         try {
@@ -844,41 +851,53 @@ async function loadCurrentImages() {
             fieldName: field,
             fileToken: entry.fileToken,
           }, { blob: true })
-          if (token !== imageLoadToken) return
-
-          const url = URL.createObjectURL(blob)
-          objectUrls.push(url)
-          results[taskIndex] = {
-            field,
-            image: { src: url, filename: entry.filename, label: field },
-          }
-
-          // 每完成一张就替换 Map，触发 Vue 立即显示已加载原图。
-          const progressiveImages = results
-            .filter((result) => result?.field === field)
-            .map((result) => result.image)
-          const progressiveMap = new Map(currentImages.value)
-          progressiveMap.set(field, progressiveImages)
-          currentImages.value = progressiveMap
-          await nextTick()
-          await new Promise((resolve) => window.setTimeout(resolve, IMAGE_REVEAL_GAP_MS))
-          if (token !== imageLoadToken) return
+          downloadSlots[taskIndex].resolve({ field, entry, blob })
         } catch (error) {
-          failedImages += 1
-          lastImageError = error?.message || '请检查附件权限'
+          downloadSlots[taskIndex].resolve({ field, entry, error })
         }
       }
     }
 
-    // 严格按照页面题目与附件顺序逐张读取；每张完成后立即渲染。
-    await worker()
+    // 同时下载最多 3 张，避免附件串行请求造成长时间等待。
+    const downloadWorkers = Promise.all(
+      Array.from({ length: Math.min(3, tasks.length) }, () => downloadWorker()),
+    )
+
+    // 下载可以并行，但渲染严格按题目顺序逐张进行。
+    for (let taskIndex = 0; taskIndex < downloadSlots.length; taskIndex += 1) {
+      const downloaded = await downloadSlots[taskIndex].promise
+      if (token !== imageLoadToken) return
+
+      if (downloaded.error) {
+        failedImages += 1
+        lastImageError = downloaded.error?.message || '请检查附件权限'
+        continue
+      }
+
+      const { field, entry, blob } = downloaded
+      const url = URL.createObjectURL(blob)
+      objectUrls.push(url)
+      results[taskIndex] = {
+        field,
+        image: { src: url, filename: entry.filename, label: field },
+      }
+
+      const progressiveImages = results
+        .filter((result) => result?.field === field)
+        .map((result) => result.image)
+      const progressiveMap = new Map(currentImages.value)
+      progressiveMap.set(field, progressiveImages)
+      currentImages.value = progressiveMap
+      await nextTick()
+
+      if (taskIndex < downloadSlots.length - 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, IMAGE_REVEAL_GAP_MS))
+      }
+    }
+    await downloadWorkers
     if (token !== imageLoadToken) return
 
-    for (const result of results.filter(Boolean)) {
-      const images = imageMap.get(result.field) || []
-      images.push(result.image)
-      imageMap.set(result.field, images)
-    }
+    for (const [field, images] of currentImages.value) imageMap.set(field, images)
 
     if (failedImages) {
       decisionSyncMessage.value = `${failedImages} 张飞书原图读取失败：${lastImageError}`
