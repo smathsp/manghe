@@ -543,7 +543,14 @@ async function openNextUnreviewed(afterNumber = '') {
       }
       return
     }
+    // “下一条”接口本身也使用 opening 状态；先释放该状态，避免
+    // openFeishuRecord 将这次正常的后续加载误判为重复点击。
+    feishuSearchState.value = 'ready'
     await openFeishuRecord(data.record)
+    if (feishuSearchState.value === 'error' && current.value) {
+      decisionSyncState.value = 'error'
+      decisionSyncMessage.value = `下一条记录载入失败：${feishuMessage.value || '请手动返回搜索'}`
+    }
   } catch (error) {
     feishuSearchState.value = 'error'
     if (current.value) {
