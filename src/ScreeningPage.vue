@@ -201,6 +201,8 @@ const feishuMessage = ref('')
 const feishuResults = ref([])
 const decisionSyncState = ref('idle')
 const decisionSyncMessage = ref('')
+const decisionInputLocked = ref(false)
+const pendingReviewSyncs = ref(0)
 const nextPrefetchState = ref('idle')
 const reviewNote = ref('')
 const records = ref([])
@@ -221,6 +223,8 @@ let imageLoadToken = 0
 let objectUrls = []
 let nextPrefetchVersion = 0
 let nextRecordPrefetch = null
+let reviewSyncQueue = Promise.resolve()
+const failedReviewSyncs = new Map()
 const remoteImageCache = new Map()
 const remoteAttachmentDownloadCache = new Map()
 const feishuSearchCache = new Map()
@@ -848,6 +852,8 @@ async function activateFeishuRecord(feishuRecord) {
   autoExported.value = false
   decisionSyncState.value = 'idle'
   decisionSyncMessage.value = ''
+  decisionInputLocked.value = false
+  if (pendingReviewSyncs.value) refreshReviewSyncStatus()
   reviewNote.value = built.reviewNote
   lightboxImage.value = null
   revealResult.value = null
@@ -1142,6 +1148,7 @@ function handleZipChange(event) {
 async function showRecord(index) {
   if (index < 0 || index >= records.value.length) return
   currentIndex.value = index
+  decisionInputLocked.value = false
   lightboxImage.value = null
   revealResult.value = null
   currentImages.value = new Map()
@@ -1175,35 +1182,78 @@ function goPrevious() {
   showRecord(Math.max(currentIndex.value - 1, 0))
 }
 
+function refreshReviewSyncStatus(lastSuccess = '') {
+  if (failedReviewSyncs.size) {
+    const failedNumbers = [...failedReviewSyncs.values()].map((item) => item.number).join('、')
+    decisionSyncState.value = 'error'
+    decisionSyncMessage.value = `编号 ${failedNumbers} 尚未同步到飞书，请返回对应记录重新提交`
+    return
+  }
+  if (pendingReviewSyncs.value) {
+    decisionSyncState.value = 'saving'
+    decisionSyncMessage.value = `正在后台同步飞书（剩余 ${pendingReviewSyncs.value} 条），可继续审核`
+    return
+  }
+  if (lastSuccess) {
+    decisionSyncState.value = 'success'
+    decisionSyncMessage.value = lastSuccess
+  }
+}
+
+function queueRemoteReviewSync(record, decision, note) {
+  pendingReviewSyncs.value += 1
+  failedReviewSyncs.delete(record.recordId)
+  refreshReviewSyncStatus()
+
+  const task = reviewSyncQueue
+    .catch(() => {})
+    .then(() => feishuRequest('/api/feishu/review', {
+      recordId: record.recordId,
+      result: decision,
+      note,
+    }))
+  reviewSyncQueue = task
+
+  task
+    .then((data) => {
+      const syncedAt = new Date(Number(data.review_time) || Date.now())
+      const currentSaved = decisions.value[record.id]
+      if (currentSaved?.result === decision && currentSaved?.note === note) {
+        decisions.value = {
+          ...decisions.value,
+          [record.id]: {
+            ...currentSaved,
+            time: syncedAt.toLocaleString('zh-CN', { hour12: false }),
+          },
+        }
+        persistDecisions()
+      }
+      feishuSearchCache.clear()
+      failedReviewSyncs.delete(record.recordId)
+      return `编号 ${record.id} 已同步到飞书：${decision} · ${syncedAt.toLocaleString('zh-CN', { hour12: false })}`
+    })
+    .catch((error) => {
+      failedReviewSyncs.set(record.recordId, {
+        number: record.id,
+        error: error?.message || '审核结果同步失败',
+      })
+      return ''
+    })
+    .then((message) => {
+      pendingReviewSyncs.value = Math.max(0, pendingReviewSyncs.value - 1)
+      refreshReviewSyncStatus(message)
+    })
+
+}
+
 async function saveDecision(decision) {
-  if (!current.value || decisionSyncState.value === 'saving') return
+  if (!current.value || decisionInputLocked.value) return
 
   const decisionStartedAt = Date.now()
   const now = new Date()
   const record = current.value
   const note = normalizeText(reviewNote.value).slice(0, 500)
-
-  if (record.remote) {
-    decisionSyncState.value = 'saving'
-    decisionSyncMessage.value = `正在保存“${decision}”，成功后自动进入下一位…`
-    revealResult.value = decision
-    try {
-      const data = await feishuRequest('/api/feishu/review', {
-        recordId: record.recordId,
-        result: decision,
-        note,
-      })
-      now.setTime(Number(data.review_time) || Date.now())
-      feishuSearchCache.clear()
-      decisionSyncState.value = 'success'
-      decisionSyncMessage.value = `已同步到飞书：${decision} · ${now.toLocaleString('zh-CN', { hour12: false })}`
-    } catch (error) {
-      decisionSyncState.value = 'error'
-      decisionSyncMessage.value = error?.message || '审核结果同步失败，请重试'
-      revealResult.value = null
-      return
-    }
-  }
+  decisionInputLocked.value = true
 
   const updatedDecisions = {
     ...decisions.value,
@@ -1216,6 +1266,7 @@ async function saveDecision(decision) {
   decisions.value = updatedDecisions
   persistDecisions()
   revealResult.value = decision
+  if (record.remote) queueRemoteReviewSync(record, decision, note)
 
   const batchComplete = !record.remote
     && records.value.length > 0
@@ -1228,7 +1279,7 @@ async function saveDecision(decision) {
 
   window.clearTimeout(decisionTimer)
   const revealDelay = record.remote
-    ? Math.max(120, 900 - (Date.now() - decisionStartedAt))
+    ? Math.max(120, 650 - (Date.now() - decisionStartedAt))
     : 1150
   decisionTimer = window.setTimeout(() => {
     if (record.remote) {
@@ -1320,6 +1371,7 @@ function resetBatch() {
   reviewNote.value = ''
   decisionSyncState.value = 'idle'
   decisionSyncMessage.value = ''
+  decisionInputLocked.value = false
   if (bundleInput.value) bundleInput.value.value = ''
   if (csvInput.value) csvInput.value.value = ''
 }
@@ -1328,10 +1380,19 @@ function openEvidence(image) {
   lightboxImage.value = lightboxImage.value?.src === image.src ? null : image
 }
 
+function warnAboutPendingReviewSync(event) {
+  if (!pendingReviewSyncs.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+window.addEventListener('beforeunload', warnAboutPendingReviewSync)
+
 onBeforeUnmount(() => {
   window.clearTimeout(decisionTimer)
   cancelNextPrefetch()
   revokeObjectUrls()
+  window.removeEventListener('beforeunload', warnAboutPendingReviewSync)
 })
 </script>
 
@@ -1563,7 +1624,7 @@ onBeforeUnmount(() => {
             <div class="vertical-record-switcher">
               <button
                 type="button"
-                :disabled="currentIndex === 0 || decisionSyncState === 'saving' || feishuSearchState === 'opening'"
+                :disabled="currentIndex === 0 || feishuSearchState === 'opening'"
                 @click="goPrevious"
               >
                 <span>←</span> 上一位
@@ -1572,8 +1633,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 :disabled="
-                  decisionSyncState === 'saving'
-                    || feishuSearchState === 'opening'
+                  feishuSearchState === 'opening'
                     || (!current.remote && currentIndex === records.length - 1)
                 "
                 @click="goNext"
@@ -1743,7 +1803,6 @@ onBeforeUnmount(() => {
         <textarea
           v-model="reviewNote"
           maxlength="500"
-          :disabled="decisionSyncState === 'saving'"
           placeholder="填写本次审核说明（可选）"
         ></textarea>
         <em>{{ reviewNote.length }} / 500</em>
@@ -1763,7 +1822,7 @@ onBeforeUnmount(() => {
         type="button"
         class="decision-button decision-reject"
         :class="{ selected: currentDecision?.result === '不通过' }"
-        :disabled="decisionSyncState === 'saving'"
+        :disabled="decisionInputLocked"
         @click="saveDecision('不通过')"
       >
         <span>×</span>
@@ -1774,7 +1833,7 @@ onBeforeUnmount(() => {
         type="button"
         class="decision-button decision-approve"
         :class="{ selected: currentDecision?.result === '通过' }"
-        :disabled="decisionSyncState === 'saving'"
+        :disabled="decisionInputLocked"
         @click="saveDecision('通过')"
       >
         <span>✓</span>
@@ -1794,8 +1853,8 @@ onBeforeUnmount(() => {
         <small>
           {{
             current.remote
-              ? decisionSyncState === 'saving'
-                ? '正在同步飞书，请勿关闭页面'
+              ? pendingReviewSyncs
+                ? '已记录，正在后台同步飞书'
                 : '结果已同步到飞书'
               : reviewedCount === records.length
                 ? '全部完成 · 结果已自动导出'
