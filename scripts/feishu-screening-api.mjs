@@ -2,6 +2,7 @@ const FEISHU_ORIGIN = 'https://open.feishu.cn'
 const BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf'
 const TABLE_ID = 'tblVnUXJQUgpjcMi'
 const MAX_BODY_BYTES = 32 * 1024
+let tenantTokenCache = null
 
 const SEARCH_FIELDS = [
   '编号',
@@ -144,12 +145,29 @@ async function feishuJson(path, { token, method = 'GET', body } = {}) {
 }
 
 async function getTenantToken(appId, appSecret) {
+  if (
+    tenantTokenCache
+    && tenantTokenCache.appId === appId
+    && tenantTokenCache.appSecret === appSecret
+    && tenantTokenCache.expiresAt > Date.now()
+  ) {
+    return tenantTokenCache.token
+  }
+
   const payload = await feishuJson('/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
     body: { app_id: appId, app_secret: appSecret },
   })
   if (!payload.tenant_access_token) throw new Error('未能获取机器人访问凭证')
-  return payload.tenant_access_token
+
+  const expiresIn = Math.max(600, Number(payload.expire) || 7200)
+  tenantTokenCache = {
+    appId,
+    appSecret,
+    token: payload.tenant_access_token,
+    expiresAt: Date.now() + Math.max(60, expiresIn - 300) * 1000,
+  }
+  return tenantTokenCache.token
 }
 
 function recordSummary(record) {
@@ -402,6 +420,11 @@ export async function handleApi(req, res, credentialDefaults = {}) {
     }
 
     if (pathname === '/api/feishu/review') {
+      if (body.prepare === true) {
+        sendJson(res, 200, { ready: true })
+        return
+      }
+
       const data = await updateReview(
         token,
         String(body.recordId || ''),

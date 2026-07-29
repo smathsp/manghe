@@ -219,6 +219,7 @@ let imageLoadToken = 0
 let objectUrls = []
 let nextPrefetchVersion = 0
 let nextRecordPrefetch = null
+const remoteImageCache = new Map()
 
 const current = computed(() => records.value[currentIndex.value] || null)
 const reviewedCount = computed(() => Object.keys(decisions.value).length)
@@ -228,12 +229,17 @@ const progressPercent = computed(() => (
 const currentDecision = computed(() => (
   current.value ? decisions.value[current.value.id] : null
 ))
-const nextPrefetchLabel = computed(() => ({
-  loading: '下一位预载中',
-  ready: '下一位已预载',
-  complete: '已预载到队尾',
-  error: '下一位将按需加载',
-}[nextPrefetchState.value] || ''))
+const nextPrefetchLabel = computed(() => {
+  if (current.value?.remote && currentIndex.value < records.value.length - 1) {
+    return '下一位已加载'
+  }
+  return {
+    loading: '下一位预载中',
+    ready: '下一位已预载',
+    complete: '已预载到队尾',
+    error: '下一位将按需加载',
+  }[nextPrefetchState.value] || ''
+})
 
 function normalizeText(value) {
   if (Array.isArray(value)) return value.map(normalizeText).filter(Boolean).join('\n')
@@ -452,6 +458,23 @@ function linkedQuestions(group) {
 function revokeObjectUrls() {
   objectUrls.forEach((url) => URL.revokeObjectURL(url))
   objectUrls = []
+  remoteImageCache.clear()
+}
+
+function cacheRemoteImages(recordId, imageMap) {
+  remoteImageCache.delete(recordId)
+  remoteImageCache.set(recordId, imageMap)
+
+  while (remoteImageCache.size > 3) {
+    const oldestKey = remoteImageCache.keys().next().value
+    const oldestImages = remoteImageCache.get(oldestKey)
+    const expiredUrls = new Set(
+      [...oldestImages.values()].flat().map((image) => image.src),
+    )
+    expiredUrls.forEach((url) => URL.revokeObjectURL(url))
+    objectUrls = objectUrls.filter((url) => !expiredUrls.has(url))
+    remoteImageCache.delete(oldestKey)
+  }
 }
 
 function remoteAttachments(value) {
@@ -496,6 +519,10 @@ async function fetchFeishuRecord(summary) {
   })
   if (!data.record) throw new Error('飞书没有返回该条记录')
   return data.record
+}
+
+function warmReviewEndpoint() {
+  feishuRequest('/api/feishu/review', { prepare: true }).catch(() => {})
 }
 
 function startNextRecordPrefetch(record) {
@@ -683,8 +710,22 @@ async function activateFeishuRecord(feishuRecord) {
     _createdTime: feishuRecord.created_time,
   }
   const built = buildRecord(row, 0)
-  records.value = [built]
-  currentIndex.value = 0
+  const existingIndex = records.value.findIndex((record) => (
+    record.remote && record.recordId === built.recordId
+  ))
+  if (existingIndex >= 0) {
+    records.value = records.value.map((record, index) => (
+      index === existingIndex ? built : record
+    ))
+    currentIndex.value = existingIndex
+  } else if (records.value.length && records.value.every((record) => record.remote)) {
+    records.value = [...records.value, built]
+    currentIndex.value = records.value.length - 1
+  } else {
+    records.value = [built]
+    currentIndex.value = 0
+    decisions.value = {}
+  }
   zipArchive.value = null
   batchStorageKey.value = ''
   batchName.value = '飞书实时审核'
@@ -697,15 +738,16 @@ async function activateFeishuRecord(feishuRecord) {
   currentImages.value = new Map()
 
   const previousResult = normalizeText(row['直播筛选结果'])
-  decisions.value = previousResult
-    ? {
-        [built.id]: {
-          result: previousResult,
-          time: formatFeishuTime(row['直播筛选时间']),
-          note: built.reviewNote,
-        },
-      }
-    : {}
+  if (previousResult) {
+    decisions.value = {
+      ...decisions.value,
+      [built.id]: {
+        result: previousResult,
+        time: formatFeishuTime(row['直播筛选时间']),
+        note: built.reviewNote,
+      },
+    }
+  }
 
   validation.value = summarizeRemoteValidation(built)
   feishuSearchState.value = 'ready'
@@ -713,6 +755,7 @@ async function activateFeishuRecord(feishuRecord) {
   await nextTick()
 
   // 审核员查看当前问答和图片时，在后台准备下一位的完整记录。
+  warmReviewEndpoint()
   startNextRecordPrefetch(built)
   await loadCurrentImages()
 }
@@ -740,11 +783,20 @@ async function loadCurrentImages() {
 
   const token = ++imageLoadToken
   imageLoading.value = true
-  revokeObjectUrls()
+  if (!record.remote) revokeObjectUrls()
 
   const imageMap = new Map()
 
   if (record.remote) {
+    const cachedImages = remoteImageCache.get(record.recordId)
+    if (cachedImages) {
+      remoteImageCache.delete(record.recordId)
+      remoteImageCache.set(record.recordId, cachedImages)
+      currentImages.value = cachedImages
+      imageLoading.value = false
+      return
+    }
+
     const tasks = ATTACHMENT_FIELDS.flatMap((field) => (
       remoteAttachments(record.row[field]).map((entry) => ({ field, entry }))
     ))
@@ -796,6 +848,7 @@ async function loadCurrentImages() {
     }
 
     if (token === imageLoadToken) {
+      cacheRemoteImages(record.recordId, imageMap)
       currentImages.value = imageMap
       imageLoading.value = false
     }
@@ -970,11 +1023,28 @@ async function showRecord(index) {
   revealResult.value = null
   currentImages.value = new Map()
   reviewNote.value = decisions.value[current.value.id]?.note ?? current.value.reviewNote ?? ''
+  validation.value = current.value.remote
+    ? summarizeRemoteValidation(current.value)
+    : validation.value
+  if (current.value.remote) {
+    if (currentIndex.value === records.value.length - 1) {
+      startNextRecordPrefetch(current.value)
+    } else {
+      cancelNextPrefetch()
+    }
+  }
   document.querySelector('.screening-content')?.scrollTo({ top: 0, behavior: 'smooth' })
   await loadCurrentImages()
 }
 
 function goNext() {
+  if (
+    current.value?.remote
+    && currentIndex.value === records.value.length - 1
+  ) {
+    openNextUnreviewed(current.value.id)
+    return
+  }
   showRecord(Math.min(currentIndex.value + 1, records.value.length - 1))
 }
 
@@ -985,13 +1055,15 @@ function goPrevious() {
 async function saveDecision(decision) {
   if (!current.value || decisionSyncState.value === 'saving') return
 
+  const decisionStartedAt = Date.now()
   const now = new Date()
   const record = current.value
   const note = normalizeText(reviewNote.value).slice(0, 500)
 
   if (record.remote) {
     decisionSyncState.value = 'saving'
-    decisionSyncMessage.value = `正在把“${decision}”同步到飞书…`
+    decisionSyncMessage.value = `正在保存“${decision}”，成功后自动进入下一位…`
+    revealResult.value = decision
     try {
       const data = await feishuRequest('/api/feishu/review', {
         recordId: record.recordId,
@@ -1004,6 +1076,7 @@ async function saveDecision(decision) {
     } catch (error) {
       decisionSyncState.value = 'error'
       decisionSyncMessage.value = error?.message || '审核结果同步失败，请重试'
+      revealResult.value = null
       return
     }
   }
@@ -1030,15 +1103,22 @@ async function saveDecision(decision) {
   }
 
   window.clearTimeout(decisionTimer)
+  const revealDelay = record.remote
+    ? Math.max(120, 900 - (Date.now() - decisionStartedAt))
+    : 1150
   decisionTimer = window.setTimeout(() => {
     if (record.remote) {
-      openNextUnreviewed(record.id)
+      if (currentIndex.value < records.value.length - 1) {
+        showRecord(currentIndex.value + 1)
+      } else {
+        openNextUnreviewed(record.id)
+      }
     } else if (currentIndex.value < records.value.length - 1) {
       showRecord(currentIndex.value + 1)
     } else {
       revealResult.value = null
     }
-  }, 1150)
+  }, revealDelay)
 }
 
 function csvEscape(value) {
@@ -1357,13 +1437,21 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="vertical-record-switcher">
-              <button type="button" :disabled="currentIndex === 0" @click="goPrevious">
+              <button
+                type="button"
+                :disabled="currentIndex === 0 || decisionSyncState === 'saving' || feishuSearchState === 'opening'"
+                @click="goPrevious"
+              >
                 <span>←</span> 上一位
               </button>
               <strong>{{ currentIndex + 1 }} / {{ records.length }}</strong>
               <button
                 type="button"
-                :disabled="currentIndex === records.length - 1"
+                :disabled="
+                  decisionSyncState === 'saving'
+                    || feishuSearchState === 'opening'
+                    || (!current.remote && currentIndex === records.length - 1)
+                "
                 @click="goNext"
               >
                 下一位 <span>→</span>
@@ -1576,7 +1664,9 @@ onBeforeUnmount(() => {
         <small>
           {{
             current.remote
-              ? '结果已同步到飞书'
+              ? decisionSyncState === 'saving'
+                ? '正在同步飞书，请勿关闭页面'
+                : '结果已同步到飞书'
               : reviewedCount === records.length
                 ? '全部完成 · 结果已自动导出'
                 : '结果已保存到本机'
