@@ -221,6 +221,7 @@ let objectUrls = []
 let nextPrefetchVersion = 0
 let nextRecordPrefetch = null
 const remoteImageCache = new Map()
+const remoteAttachmentDownloadCache = new Map()
 
 const current = computed(() => records.value[currentIndex.value] || null)
 const reviewedCount = computed(() => Object.keys(decisions.value).length)
@@ -481,6 +482,7 @@ function revokeObjectUrls() {
   objectUrls.forEach((url) => URL.revokeObjectURL(url))
   objectUrls = []
   remoteImageCache.clear()
+  remoteAttachmentDownloadCache.clear()
 }
 
 function cacheRemoteImages(recordId, imageMap) {
@@ -507,6 +509,66 @@ function remoteAttachments(value) {
       filename: normalizeText(item?.name ?? item?.file_name) || '飞书原图',
     }))
     .filter((item) => item.fileToken)
+}
+
+function visibleAttachmentFields(record) {
+  return record.groups.flatMap((group) => (
+    group.questions
+      .filter((question) => question.evidence && shouldShowEvidence(question.answer))
+      .map((question) => question.evidence.field)
+  ))
+}
+
+function buildRemoteFeishuRecord(feishuRecord) {
+  const row = {
+    ...(feishuRecord.fields || {}),
+    _remote: true,
+    _recordId: feishuRecord.record_id,
+    _createdTime: feishuRecord.created_time,
+  }
+  return buildRecord(row, 0)
+}
+
+function prepareRemoteAttachmentDownloads(record) {
+  const cached = remoteAttachmentDownloadCache.get(record.recordId)
+  if (cached) return cached
+
+  const tasks = visibleAttachmentFields(record).flatMap((field) => (
+    remoteAttachments(record.row[field]).map((entry) => ({ field, entry }))
+  ))
+  const slots = tasks.map(() => {
+    let resolve
+    const promise = new Promise((slotResolve) => {
+      resolve = slotResolve
+    })
+    return { promise, resolve }
+  })
+  let cursor = 0
+
+  const worker = async () => {
+    while (cursor < tasks.length) {
+      const taskIndex = cursor
+      cursor += 1
+      const { field, entry } = tasks[taskIndex]
+      try {
+        const blob = await feishuRequest('/api/feishu/attachment', {
+          recordId: record.recordId,
+          fieldName: field,
+          fileToken: entry.fileToken,
+        }, { blob: true })
+        slots[taskIndex].resolve({ field, entry, blob })
+      } catch (error) {
+        slots[taskIndex].resolve({ field, entry, error })
+      }
+    }
+  }
+
+  const workers = Promise.all(
+    Array.from({ length: Math.min(3, tasks.length) }, () => worker()),
+  )
+  const prepared = { slots, workers }
+  remoteAttachmentDownloadCache.set(record.recordId, prepared)
+  return prepared
 }
 
 function cancelNextPrefetch() {
@@ -560,7 +622,9 @@ function startNextRecordPrefetch(record) {
   const promise = (async () => {
     const data = await feishuRequest('/api/feishu/next', { afterNumber: fromNumber })
     if (!data.record) return null
-    return fetchFeishuRecord(data.record)
+    const nextRecord = await fetchFeishuRecord(data.record)
+    prepareRemoteAttachmentDownloads(buildRemoteFeishuRecord(nextRecord))
+    return nextRecord
   })()
 
   nextRecordPrefetch = { version, fromNumber, promise }
@@ -725,13 +789,8 @@ function summarizeRemoteValidation(record) {
 }
 
 async function activateFeishuRecord(feishuRecord) {
-  const row = {
-    ...(feishuRecord.fields || {}),
-    _remote: true,
-    _recordId: feishuRecord.record_id,
-    _createdTime: feishuRecord.created_time,
-  }
-  const built = buildRecord(row, 0)
+  const built = buildRemoteFeishuRecord(feishuRecord)
+  const row = built.row
   const existingIndex = records.value.findIndex((record) => (
     record.remote && record.recordId === built.recordId
   ))
@@ -808,11 +867,7 @@ async function loadCurrentImages() {
   if (!record.remote) revokeObjectUrls()
 
   const imageMap = new Map()
-  const visibleAttachmentFields = record.groups.flatMap((group) => (
-    group.questions
-      .filter((question) => question.evidence && shouldShowEvidence(question.answer))
-      .map((question) => question.evidence.field)
-  ))
+  const orderedAttachmentFields = visibleAttachmentFields(record)
 
   if (record.remote) {
     const cachedImages = remoteImageCache.get(record.recordId)
@@ -824,44 +879,11 @@ async function loadCurrentImages() {
       return
     }
 
-    const tasks = visibleAttachmentFields.flatMap((field) => (
-      remoteAttachments(record.row[field]).map((entry) => ({ field, entry }))
-    ))
-    const results = new Array(tasks.length)
-    const downloadSlots = tasks.map(() => {
-      let resolve
-      const promise = new Promise((slotResolve) => {
-        resolve = slotResolve
-      })
-      return { promise, resolve }
-    })
-    let downloadCursor = 0
+    const { slots: downloadSlots, workers: downloadWorkers } =
+      prepareRemoteAttachmentDownloads(record)
+    const results = new Array(downloadSlots.length)
     let failedImages = 0
     let lastImageError = ''
-
-    const downloadWorker = async () => {
-      while (downloadCursor < tasks.length) {
-        const taskIndex = downloadCursor
-        downloadCursor += 1
-        const { field, entry } = tasks[taskIndex]
-
-        try {
-          const blob = await feishuRequest('/api/feishu/attachment', {
-            recordId: record.recordId,
-            fieldName: field,
-            fileToken: entry.fileToken,
-          }, { blob: true })
-          downloadSlots[taskIndex].resolve({ field, entry, blob })
-        } catch (error) {
-          downloadSlots[taskIndex].resolve({ field, entry, error })
-        }
-      }
-    }
-
-    // 同时下载最多 3 张，避免附件串行请求造成长时间等待。
-    const downloadWorkers = Promise.all(
-      Array.from({ length: Math.min(3, tasks.length) }, () => downloadWorker()),
-    )
 
     // 下载可以并行，但渲染严格按题目顺序逐张进行。
     for (let taskIndex = 0; taskIndex < downloadSlots.length; taskIndex += 1) {
@@ -896,6 +918,7 @@ async function loadCurrentImages() {
     }
     await downloadWorkers
     if (token !== imageLoadToken) return
+    remoteAttachmentDownloadCache.delete(record.recordId)
 
     for (const [field, images] of currentImages.value) imageMap.set(field, images)
 
@@ -917,7 +940,7 @@ async function loadCurrentImages() {
     return
   }
 
-  for (const field of visibleAttachmentFields) {
+  for (const field of orderedAttachmentFields) {
     const entries = attachmentEntries(field, record.id)
     const images = []
 
