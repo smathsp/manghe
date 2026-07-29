@@ -17,7 +17,7 @@ const ATTACHMENT_FIELDS = [
 
 const TRAFFIC_CARD_DETAIL_FIELD = '请列出流量卡的累计充值金额，并提供ICCID。'
 const STANDARDIZED_ICCID_FIELD = 'ICCID标准化'
-const IMAGE_REVEAL_GAP_MS = 240
+const IMAGE_REVEAL_GAP_MS = 600
 
 const GROUPS = [
   {
