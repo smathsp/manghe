@@ -3,6 +3,12 @@ const BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf'
 const TABLE_ID = 'tblVnUXJQUgpjcMi'
 const MAX_BODY_BYTES = 32 * 1024
 const SEARCH_CACHE_TTL_MS = 30 * 1000
+const INITIAL_SCREEN_APPROVED_STATUSES = new Set([
+  '待张导审核',
+  '技术合格',
+  '初筛通过',
+  '通过初筛',
+])
 let tenantTokenCache = null
 let searchIndexCache = null
 let searchIndexPromise = null
@@ -190,6 +196,10 @@ function isOldDuplicateRecord(record) {
   ].some((value) => /重复[·・\s_-]*旧记录|旧记录/.test(normalizeValue(value)))
 }
 
+function isInitialScreenApproved(value) {
+  return INITIAL_SCREEN_APPROVED_STATUSES.has(normalizeValue(value))
+}
+
 function scoreRecord(record, query) {
   const fields = record.fields || {}
   const values = SEARCH_FIELDS.slice(0, 5).map((field) => normalizeSearch(fields[field]))
@@ -337,8 +347,14 @@ async function searchRecords(token, rawQuery) {
   }
 }
 
-async function nextUnreviewedRecord(token, rawAfterNumber) {
+async function nextUnreviewedRecord(token, rawAfterNumber, rawExcludedRecordIds = []) {
   const afterNumber = Number(normalizeValue(rawAfterNumber))
+  const excludedRecordIds = new Set(
+    (Array.isArray(rawExcludedRecordIds) ? rawExcludedRecordIds : [])
+      .map((value) => String(value || '').trim())
+      .filter((value) => /^rec[a-z0-9]+$/i.test(value))
+      .slice(0, 500),
+  )
   let firstCandidate = null
   let pageToken = ''
   let pageCount = 0
@@ -368,11 +384,12 @@ async function nextUnreviewedRecord(token, rawAfterNumber) {
     )
 
     for (const record of payload.data?.items || []) {
+      if (excludedRecordIds.has(record.record_id)) continue
       if (isOldDuplicateRecord(record)) continue
       const status = normalizeValue(record.fields?.['初筛状态'])
       const result = normalizeValue(record.fields?.['直播筛选结果'])
       if (result) continue
-      if (/旧记录|未通过|不合格|重复/.test(status)) continue
+      if (!isInitialScreenApproved(status)) continue
 
       if (!firstCandidate) firstCandidate = record
       const number = Number(normalizeValue(record.fields?.['编号']))
@@ -591,7 +608,11 @@ export async function handleApi(req, res, credentialDefaults = {}) {
     }
 
     if (pathname === '/api/feishu/next') {
-      const record = await nextUnreviewedRecord(token, body.afterNumber)
+      const record = await nextUnreviewedRecord(
+        token,
+        body.afterNumber,
+        body.excludeRecordIds,
+      )
       sendJson(res, 200, { record })
       return
     }

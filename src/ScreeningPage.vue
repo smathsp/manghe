@@ -224,7 +224,7 @@ let objectUrls = []
 let nextPrefetchVersion = 0
 let nextRecordPrefetch = null
 let reviewSyncQueue = Promise.resolve()
-const failedReviewSyncs = new Map()
+const failedReviewSyncs = ref(new Map())
 const remoteImageCache = new Map()
 const remoteAttachmentDownloadCache = new Map()
 const feishuSearchCache = new Map()
@@ -236,6 +236,16 @@ const progressPercent = computed(() => (
 ))
 const currentDecision = computed(() => (
   current.value ? decisions.value[current.value.id] : null
+))
+const currentPersistedReviewResult = computed(() => (
+  current.value?.remote
+    ? normalizeText(current.value.row['直播筛选结果'])
+      || normalizeText(currentDecision.value?.result)
+    : ''
+))
+const currentAlreadyReviewed = computed(() => (
+  Boolean(currentPersistedReviewResult.value)
+  && !failedReviewSyncs.value.has(current.value?.recordId)
 ))
 const nextPrefetchLabel = computed(() => {
   if (current.value?.remote && currentIndex.value < records.value.length - 1) {
@@ -612,6 +622,13 @@ function cancelNextPrefetch() {
   nextPrefetchState.value = 'idle'
 }
 
+function reviewedRemoteRecordIds() {
+  return records.value
+    .filter((record) => record.remote && decisions.value[record.id])
+    .map((record) => record.recordId)
+    .filter(Boolean)
+}
+
 async function feishuRequest(path, payload = {}, { blob = false } = {}) {
   const response = await fetch(path, {
     method: 'POST',
@@ -655,7 +672,10 @@ function startNextRecordPrefetch(record) {
   nextPrefetchState.value = 'loading'
 
   const promise = (async () => {
-    const data = await feishuRequest('/api/feishu/next', { afterNumber: fromNumber })
+    const data = await feishuRequest('/api/feishu/next', {
+      afterNumber: fromNumber,
+      excludeRecordIds: reviewedRemoteRecordIds(),
+    })
     if (!data.record) return null
     const nextRecord = await fetchFeishuRecord(data.record)
     prepareRemoteAttachmentDownloads(buildRemoteFeishuRecord(nextRecord))
@@ -785,7 +805,10 @@ async function openNextUnreviewed(afterNumber = '') {
       return
     }
 
-    const data = await feishuRequest('/api/feishu/next', { afterNumber })
+    const data = await feishuRequest('/api/feishu/next', {
+      afterNumber,
+      excludeRecordIds: reviewedRemoteRecordIds(),
+    })
     if (!data.record) {
       feishuSearchState.value = 'ready'
       if (current.value) {
@@ -879,6 +902,10 @@ async function activateFeishuRecord(feishuRecord) {
         time: formatFeishuTime(row['直播筛选时间']),
         note: built.reviewNote,
       },
+    }
+    if (!pendingReviewSyncs.value) {
+      decisionSyncState.value = 'success'
+      decisionSyncMessage.value = `该记录已经直播审核为“${previousResult}”，当前仅供查看`
     }
   }
 
@@ -1196,8 +1223,8 @@ function goPrevious() {
 }
 
 function refreshReviewSyncStatus(lastSuccess = '') {
-  if (failedReviewSyncs.size) {
-    const failedNumbers = [...failedReviewSyncs.values()].map((item) => item.number).join('、')
+  if (failedReviewSyncs.value.size) {
+    const failedNumbers = [...failedReviewSyncs.value.values()].map((item) => item.number).join('、')
     decisionSyncState.value = 'error'
     decisionSyncMessage.value = `编号 ${failedNumbers} 尚未同步到飞书，请返回对应记录重新提交`
     return
@@ -1215,7 +1242,9 @@ function refreshReviewSyncStatus(lastSuccess = '') {
 
 function queueRemoteReviewSync(record, decision, note) {
   pendingReviewSyncs.value += 1
-  failedReviewSyncs.delete(record.recordId)
+  const remainingFailures = new Map(failedReviewSyncs.value)
+  remainingFailures.delete(record.recordId)
+  failedReviewSyncs.value = remainingFailures
   refreshReviewSyncStatus()
 
   const task = reviewSyncQueue
@@ -1242,11 +1271,13 @@ function queueRemoteReviewSync(record, decision, note) {
         persistDecisions()
       }
       feishuSearchCache.clear()
-      failedReviewSyncs.delete(record.recordId)
+      const remainingFailures = new Map(failedReviewSyncs.value)
+      remainingFailures.delete(record.recordId)
+      failedReviewSyncs.value = remainingFailures
       return `编号 ${record.id} 已同步到飞书：${decision} · ${syncedAt.toLocaleString('zh-CN', { hour12: false })}`
     })
     .catch((error) => {
-      failedReviewSyncs.set(record.recordId, {
+      failedReviewSyncs.value = new Map(failedReviewSyncs.value).set(record.recordId, {
         number: record.id,
         error: error?.message || '审核结果同步失败',
       })
@@ -1260,7 +1291,7 @@ function queueRemoteReviewSync(record, decision, note) {
 }
 
 async function saveDecision(decision) {
-  if (!current.value || decisionInputLocked.value) return
+  if (!current.value || decisionInputLocked.value || currentAlreadyReviewed.value) return
 
   const decisionStartedAt = Date.now()
   const now = new Date()
@@ -1619,7 +1650,13 @@ onBeforeUnmount(() => {
               <div class="candidate-avatar">{{ firstCharacter(current.nickname) }}</div>
               <div>
                 <span class="precheck-badge">
-                  {{ current.remote ? '飞书实时记录 · 审核结果可同步' : '已通过初筛 · 本地只读审核' }}
+                  {{
+                    current.remote
+                      ? currentAlreadyReviewed
+                        ? `已直播审核：${currentPersistedReviewResult} · 仅查看`
+                        : '飞书实时记录 · 审核结果可同步'
+                      : '已通过初筛 · 本地只读审核'
+                  }}
                   <template v-if="current.remote && nextPrefetchLabel">
                     · {{ nextPrefetchLabel }}
                   </template>
@@ -1816,6 +1853,7 @@ onBeforeUnmount(() => {
         <textarea
           v-model="reviewNote"
           maxlength="500"
+          :disabled="currentAlreadyReviewed"
           placeholder="填写本次审核说明（可选）"
         ></textarea>
         <em>{{ reviewNote.length }} / 500</em>
@@ -1835,7 +1873,7 @@ onBeforeUnmount(() => {
         type="button"
         class="decision-button decision-reject"
         :class="{ selected: currentDecision?.result === '不通过' }"
-        :disabled="decisionInputLocked"
+        :disabled="decisionInputLocked || currentAlreadyReviewed"
         @click="saveDecision('不通过')"
       >
         <span>×</span>
@@ -1846,7 +1884,7 @@ onBeforeUnmount(() => {
         type="button"
         class="decision-button decision-approve"
         :class="{ selected: currentDecision?.result === '通过' }"
-        :disabled="decisionInputLocked"
+        :disabled="decisionInputLocked || currentAlreadyReviewed"
         @click="saveDecision('通过')"
       >
         <span>✓</span>
