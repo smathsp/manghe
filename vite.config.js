@@ -16,6 +16,7 @@ export default defineConfig({
         voidBox: 'void-box/index.html',
         mail: 'mail/index.html',
         screening: 'screening/index.html',
+        screeningLightboard: 'screening/lightboard/index.html',
       },
     },
   },

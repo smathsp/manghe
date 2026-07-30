@@ -24,6 +24,8 @@ const SEARCH_FIELDS = [
   '初筛状态',
   '直播筛选结果',
   '直播筛选时间',
+  '直播筛选备注',
+  '灯牌总和',
 ]
 
 function sendJson(res, status, data) {
@@ -347,8 +349,14 @@ async function searchRecords(token, rawQuery) {
   }
 }
 
-async function nextUnreviewedRecord(token, rawAfterNumber, rawExcludedRecordIds = []) {
+async function nextUnreviewedRecord(
+  token,
+  rawAfterNumber,
+  rawExcludedRecordIds = [],
+  rawReviewMode = '',
+) {
   const afterNumber = Number(normalizeValue(rawAfterNumber))
+  const reviewMode = String(rawReviewMode || '').trim()
   const excludedRecordIds = new Set(
     (Array.isArray(rawExcludedRecordIds) ? rawExcludedRecordIds : [])
       .map((value) => String(value || '').trim())
@@ -367,6 +375,8 @@ async function nextUnreviewedRecord(token, rawAfterNumber, rawExcludedRecordIds 
     '初筛状态',
     '直播筛选结果',
     '直播筛选时间',
+    '直播筛选备注',
+    '灯牌总和',
   ]
 
   do {
@@ -388,7 +398,9 @@ async function nextUnreviewedRecord(token, rawAfterNumber, rawExcludedRecordIds 
       if (isOldDuplicateRecord(record)) continue
       const status = normalizeValue(record.fields?.['初筛状态'])
       const result = normalizeValue(record.fields?.['直播筛选结果'])
+      const lightboardTotal = normalizeValue(record.fields?.['灯牌总和'])
       if (result) continue
+      if (reviewMode === 'lightboard' && /^\d{1,6}$/.test(lightboardTotal)) continue
       if (!isInitialScreenApproved(status)) continue
 
       if (!firstCandidate) firstCandidate = record
@@ -414,24 +426,39 @@ async function getRecord(token, recordId) {
   return payload.data?.record
 }
 
-async function updateReview(token, recordId, result, rawNote) {
+async function updateReview(
+  token,
+  recordId,
+  result,
+  rawNote,
+  rawLightboardTotal = '',
+  lightboardMode = false,
+) {
   if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
   if (!['通过', '不通过'].includes(result)) throw new Error('审核结果只能是“通过”或“不通过”')
   const note = String(rawNote || '').trim()
-  if (note.length > 500) throw new Error('直播筛选备注不能超过 500 个字符')
+  const lightboardTotal = String(rawLightboardTotal || '').trim()
+  if (lightboardMode) {
+    if (!/^\d{1,6}$/.test(lightboardTotal)) throw new Error('灯牌总和必须为非负整数')
+  } else if (note.length > 500) {
+    throw new Error('直播筛选备注不能超过 500 个字符')
+  }
 
   const reviewTime = Date.now()
+  const fields = {
+    直播筛选结果: result,
+    直播筛选时间: reviewTime,
+    ...(lightboardMode
+      ? { 灯牌总和: Number(lightboardTotal) }
+      : { 直播筛选备注: note }),
+  }
   const payload = await feishuJson(
     `/open-apis/bitable/v1/apps/${BASE_TOKEN}/tables/${TABLE_ID}/records/${recordId}`,
     {
       token,
       method: 'PUT',
       body: {
-        fields: {
-          直播筛选结果: result,
-          直播筛选时间: reviewTime,
-          直播筛选备注: note,
-        },
+        fields,
       },
     },
   )
@@ -439,8 +466,36 @@ async function updateReview(token, recordId, result, rawNote) {
   return {
     record_id: recordId,
     result,
-    note,
+    note: lightboardMode ? lightboardTotal : note,
     review_time: reviewTime,
+    record: payload.data?.record,
+  }
+}
+
+async function updateLightboardTotal(token, recordId, rawTotal) {
+  if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
+  const lightboardTotal = String(rawTotal || '').trim()
+  if (!/^\d{1,6}$/.test(lightboardTotal)) throw new Error('灯牌总和必须为非负整数')
+
+  const savedTime = Date.now()
+  const payload = await feishuJson(
+    `/open-apis/bitable/v1/apps/${BASE_TOKEN}/tables/${TABLE_ID}/records/${recordId}`,
+    {
+      token,
+      method: 'PUT',
+      body: {
+        fields: {
+          灯牌总和: Number(lightboardTotal),
+        },
+      },
+    },
+  )
+
+  return {
+    record_id: recordId,
+    result: '',
+    note: lightboardTotal,
+    saved_time: savedTime,
     record: payload.data?.record,
   }
 }
@@ -612,6 +667,7 @@ export async function handleApi(req, res, credentialDefaults = {}) {
         token,
         body.afterNumber,
         body.excludeRecordIds,
+        body.reviewMode,
       )
       sendJson(res, 200, { record })
       return
@@ -623,12 +679,20 @@ export async function handleApi(req, res, credentialDefaults = {}) {
         return
       }
 
-      const data = await updateReview(
-        token,
-        String(body.recordId || ''),
-        String(body.result || '').trim(),
-        body.note,
-      )
+      const data = body.lightboardOnly === true
+        ? await updateLightboardTotal(
+          token,
+          String(body.recordId || ''),
+          body.lightboardTotal,
+        )
+        : await updateReview(
+          token,
+          String(body.recordId || ''),
+          String(body.result || '').trim(),
+          body.note,
+          body.lightboardTotal,
+          body.lightboardMode === true,
+        )
       sendJson(res, 200, data)
       return
     }

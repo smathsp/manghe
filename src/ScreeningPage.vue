@@ -4,6 +4,15 @@ import JSZip from 'jszip'
 import Papa from 'papaparse'
 import './screening.css'
 
+const props = defineProps({
+  mode: {
+    type: String,
+    default: 'full',
+  },
+})
+
+const isLightboardMode = computed(() => props.mode === 'lightboard')
+
 const ATTACHMENT_FIELDS = [
   '你参加过哪些鲲鹏产品的内测或公测活动？ 2',
   '请提供你发布作品的截图',
@@ -183,6 +192,51 @@ const GROUPS = [
   },
 ]
 
+const LIGHTBOARD_GROUPS = [
+  {
+    id: 'lightboards',
+    label: '粉丝灯牌截图',
+    questions: [
+      {
+        number: 23,
+        question: '鲲鹏张导粉丝灯牌',
+        fields: ['你是否观看鲲鹏张导抖音的直播？'],
+        compact: true,
+        hideAnswer: true,
+        forceEvidence: true,
+        evidence: {
+          number: 24,
+          field: '请提供观看粉丝灯牌截图',
+          question: '鲲鹏张导粉丝灯牌截图',
+        },
+      },
+      {
+        number: 25,
+        question: '张导严选粉丝灯牌',
+        fields: ['你是否观看张导严选抖音号的直播？'],
+        compact: true,
+        hideAnswer: true,
+        forceEvidence: true,
+        evidence: {
+          number: 26,
+          field: '请提供观看粉丝灯牌截图 2',
+          question: '张导严选粉丝灯牌截图',
+        },
+      },
+    ],
+  },
+]
+
+function configuredGroups() {
+  return isLightboardMode.value ? LIGHTBOARD_GROUPS : GROUPS
+}
+
+function configuredAttachmentFields() {
+  return isLightboardMode.value
+    ? ['请提供观看粉丝灯牌截图', '请提供观看粉丝灯牌截图 2']
+    : ATTACHMENT_FIELDS
+}
+
 const bundleInput = ref(null)
 const csvInput = ref(null)
 const csvFile = ref(null)
@@ -243,8 +297,14 @@ const currentPersistedReviewResult = computed(() => (
       || normalizeText(currentDecision.value?.result)
     : ''
 ))
+const currentSavedLightboardTotal = computed(() => {
+  if (!current.value?.remote || !isLightboardMode.value) return ''
+  const value = normalizeText(current.value.row['灯牌总和'])
+    || normalizeText(currentDecision.value?.note)
+  return /^\d{1,6}$/.test(value) ? value : ''
+})
 const currentAlreadyReviewed = computed(() => (
-  Boolean(currentPersistedReviewResult.value)
+  Boolean(currentPersistedReviewResult.value || currentSavedLightboardTotal.value)
   && !failedReviewSyncs.value.has(current.value?.recordId)
 ))
 const nextPrefetchLabel = computed(() => {
@@ -265,6 +325,20 @@ function normalizeText(value) {
     return normalizeText(value.text ?? value.name ?? value.value ?? '')
   }
   return String(value ?? '').replace(/\r\n/g, '\n').trim()
+}
+
+function searchResultStatus(record) {
+  const result = normalizeText(record.fields['直播筛选结果'])
+  if (result) return result
+  const lightboardTotal = normalizeText(record.fields['灯牌总和'])
+  if (isLightboardMode.value && /^\d{1,6}$/.test(lightboardTotal)) {
+    return `灯牌 ${lightboardTotal}`
+  }
+  return '未直播审核'
+}
+
+function searchResultCompleted(record) {
+  return searchResultStatus(record) !== '未直播审核'
 }
 
 function formatFeishuTime(value) {
@@ -367,8 +441,9 @@ function buildRecord(row, index) {
     remote: Boolean(row._remote),
     recordId: normalizeText(row._recordId),
     reviewNote: normalizeText(row['直播筛选备注']),
+    lightboardTotal: normalizeText(row['灯牌总和']),
     trafficCard: buildTrafficCard(row),
-    groups: GROUPS.map((group) => ({
+    groups: configuredGroups().map((group) => ({
       ...group,
       questions: group.questions.map((question) => buildQuestion(row, question)),
     })),
@@ -416,7 +491,7 @@ function parseAttachmentEntry(path) {
   const field = parts.at(-2)
   const filename = parts.at(-1)
   const match = filename.match(/^(.+?)(?:\((\d+)\))?\.(jpe?g|png|webp|gif|bmp)$/i)
-  if (!match || !ATTACHMENT_FIELDS.includes(field)) return null
+  if (!match || !configuredAttachmentFields().includes(field)) return null
 
   return {
     field,
@@ -486,8 +561,16 @@ function answerTone(answer) {
   return ''
 }
 
+function handleLightboardTotalInput(event) {
+  reviewNote.value = String(event.target.value || '').replace(/\D/g, '').slice(0, 6)
+}
+
 function shouldShowEvidence(answer) {
   return normalizeText(answer) === '是'
+}
+
+function shouldShowQuestionEvidence(question) {
+  return Boolean(question.forceEvidence) || shouldShowEvidence(question.answer)
 }
 
 function linkedQuestions(group) {
@@ -543,7 +626,7 @@ function remoteAttachments(value) {
 function visibleAttachmentFields(record) {
   return record.groups.flatMap((group) => (
     group.questions
-      .filter((question) => question.evidence && shouldShowEvidence(question.answer))
+      .filter((question) => question.evidence && shouldShowQuestionEvidence(question))
       .map((question) => question.evidence.field)
   ))
 }
@@ -675,6 +758,7 @@ function startNextRecordPrefetch(record) {
     const data = await feishuRequest('/api/feishu/next', {
       afterNumber: fromNumber,
       excludeRecordIds: reviewedRemoteRecordIds(),
+      reviewMode: isLightboardMode.value ? 'lightboard' : 'full',
     })
     if (!data.record) return null
     const nextRecord = await fetchFeishuRecord(data.record)
@@ -808,6 +892,7 @@ async function openNextUnreviewed(afterNumber = '') {
     const data = await feishuRequest('/api/feishu/next', {
       afterNumber,
       excludeRecordIds: reviewedRemoteRecordIds(),
+      reviewMode: isLightboardMode.value ? 'lightboard' : 'full',
     })
     if (!data.record) {
       feishuSearchState.value = 'ready'
@@ -843,7 +928,7 @@ function summarizeRemoteValidation(record) {
   let multiple = 0
   let missing = 0
 
-  for (const field of ATTACHMENT_FIELDS) {
+  for (const field of configuredAttachmentFields()) {
     const count = remoteAttachments(record.row[field]).length
     attachments += count
     if (count > 1) multiple += 1
@@ -851,7 +936,7 @@ function summarizeRemoteValidation(record) {
 
   for (const group of record.groups) {
     for (const question of group.questions.filter((item) => item.evidence)) {
-      if (shouldShowEvidence(question.answer)
+      if (shouldShowQuestionEvidence(question)
         && remoteAttachments(record.row[question.evidence.field]).length === 0) {
         missing += 1
       }
@@ -882,30 +967,47 @@ async function activateFeishuRecord(feishuRecord) {
   }
   zipArchive.value = null
   batchStorageKey.value = ''
-  batchName.value = '飞书实时审核'
+  batchName.value = isLightboardMode.value ? '飞书灯牌审核' : '飞书实时审核'
   autoExported.value = false
   decisionSyncState.value = 'idle'
   decisionSyncMessage.value = ''
   decisionInputLocked.value = false
   if (pendingReviewSyncs.value) refreshReviewSyncStatus()
-  reviewNote.value = built.reviewNote
+  reviewNote.value = isLightboardMode.value ? built.lightboardTotal : built.reviewNote
   lightboxImage.value = null
   revealResult.value = null
   currentImages.value = new Map()
 
   const previousResult = normalizeText(row['直播筛选结果'])
+  const previousLightboardTotal = isLightboardMode.value
+    && /^\d{1,6}$/.test(built.lightboardTotal)
+    ? built.lightboardTotal
+    : ''
   if (previousResult) {
     decisions.value = {
       ...decisions.value,
       [built.id]: {
         result: previousResult,
         time: formatFeishuTime(row['直播筛选时间']),
-        note: built.reviewNote,
+        note: isLightboardMode.value ? built.lightboardTotal : built.reviewNote,
       },
     }
     if (!pendingReviewSyncs.value) {
       decisionSyncState.value = 'success'
       decisionSyncMessage.value = `该记录已经直播审核为“${previousResult}”，当前仅供查看`
+    }
+  } else if (previousLightboardTotal) {
+    decisions.value = {
+      ...decisions.value,
+      [built.id]: {
+        result: '',
+        time: '',
+        note: previousLightboardTotal,
+      },
+    }
+    if (!pendingReviewSyncs.value) {
+      decisionSyncState.value = 'success'
+      decisionSyncMessage.value = `灯牌总和 ${previousLightboardTotal} 已保存，当前仅供查看`
     }
   }
 
@@ -1125,7 +1227,7 @@ async function importBatch() {
     let missingFields = 0
 
     builtRecords.forEach((record) => {
-      ATTACHMENT_FIELDS.forEach((field) => {
+      configuredAttachmentFields().forEach((field) => {
         const entries = index.get(field)?.get(record.id) || []
         const csvHasAttachment = Boolean(normalizeText(record.row[field]))
         attachmentCount += entries.length
@@ -1240,7 +1342,7 @@ function refreshReviewSyncStatus(lastSuccess = '') {
   }
 }
 
-function queueRemoteReviewSync(record, decision, note) {
+function queueRemoteReviewSync(record, decision, note, lightboardOnly = false) {
   pendingReviewSyncs.value += 1
   const remainingFailures = new Map(failedReviewSyncs.value)
   remainingFailures.delete(record.recordId)
@@ -1252,13 +1354,16 @@ function queueRemoteReviewSync(record, decision, note) {
     .then(() => feishuRequest('/api/feishu/review', {
       recordId: record.recordId,
       result: decision,
-      note,
+      note: isLightboardMode.value ? '' : note,
+      lightboardTotal: isLightboardMode.value ? note : '',
+      lightboardMode: isLightboardMode.value,
+      lightboardOnly,
     }))
   reviewSyncQueue = task
 
   task
     .then((data) => {
-      const syncedAt = new Date(Number(data.review_time) || Date.now())
+      const syncedAt = new Date(Number(data.review_time || data.saved_time) || Date.now())
       const currentSaved = decisions.value[record.id]
       if (currentSaved?.result === decision && currentSaved?.note === note) {
         decisions.value = {
@@ -1274,7 +1379,9 @@ function queueRemoteReviewSync(record, decision, note) {
       const remainingFailures = new Map(failedReviewSyncs.value)
       remainingFailures.delete(record.recordId)
       failedReviewSyncs.value = remainingFailures
-      return `编号 ${record.id} 已同步到飞书：${decision} · ${syncedAt.toLocaleString('zh-CN', { hour12: false })}`
+      return lightboardOnly
+        ? `编号 ${record.id} 的灯牌总和 ${note} 已保存 · ${syncedAt.toLocaleString('zh-CN', { hour12: false })}`
+        : `编号 ${record.id} 已同步到飞书：${decision} · ${syncedAt.toLocaleString('zh-CN', { hour12: false })}`
     })
     .catch((error) => {
       failedReviewSyncs.value = new Map(failedReviewSyncs.value).set(record.recordId, {
@@ -1290,13 +1397,18 @@ function queueRemoteReviewSync(record, decision, note) {
 
 }
 
-async function saveDecision(decision) {
+async function saveDecision(decision, { lightboardOnly = false } = {}) {
   if (!current.value || decisionInputLocked.value || currentAlreadyReviewed.value) return
 
   const decisionStartedAt = Date.now()
   const now = new Date()
   const record = current.value
   const note = normalizeText(reviewNote.value).slice(0, 500)
+  if (isLightboardMode.value && !/^\d{1,6}$/.test(note)) {
+    decisionSyncState.value = 'error'
+    decisionSyncMessage.value = '请先填写两个灯牌数字的总和（仅限非负整数）'
+    return
+  }
   decisionInputLocked.value = true
 
   const updatedDecisions = {
@@ -1309,8 +1421,8 @@ async function saveDecision(decision) {
   }
   decisions.value = updatedDecisions
   persistDecisions()
-  revealResult.value = decision
-  if (record.remote) queueRemoteReviewSync(record, decision, note)
+  revealResult.value = decision || null
+  if (record.remote) queueRemoteReviewSync(record, decision, note, lightboardOnly)
 
   const batchComplete = !record.remote
     && records.value.length > 0
@@ -1338,6 +1450,10 @@ async function saveDecision(decision) {
       revealResult.value = null
     }
   }, revealDelay)
+}
+
+function saveLightboardTotal() {
+  saveDecision('', { lightboardOnly: true })
 }
 
 function csvEscape(value) {
@@ -1446,13 +1562,24 @@ onBeforeUnmount(() => {
 
     <section v-if="!current" class="import-shell">
       <div class="import-mark" aria-hidden="true">鲲</div>
-      <p class="eyebrow">TIANHUO LIVE SCREENING</p>
-      <h1>选择审核数据</h1>
+      <p class="eyebrow">
+        {{ isLightboardMode ? 'TIANHUO LIGHTBOARD REVIEW' : 'TIANHUO LIVE SCREENING' }}
+      </p>
+      <h1>{{ isLightboardMode ? '灯牌截图审核' : '选择审核数据' }}</h1>
       <p class="import-intro">
-        可通过飞书机器人查找真实记录并同步审核结果，也可继续导入本地 ZIP 审核。
+        {{
+          isLightboardMode
+            ? '仅审核两张粉丝灯牌截图，并将数字同步到飞书“灯牌总和”字段。'
+            : '可通过飞书机器人查找真实记录并同步审核结果，也可继续导入本地 ZIP 审核。'
+        }}
       </p>
 
-      <div class="source-mode-switch" role="tablist" aria-label="审核数据来源">
+      <div
+        v-if="!isLightboardMode"
+        class="source-mode-switch"
+        role="tablist"
+        aria-label="审核数据来源"
+      >
         <button
           type="button"
           role="tab"
@@ -1567,9 +1694,9 @@ onBeforeUnmount(() => {
             </span>
             <span
               class="result-status"
-              :class="normalizeText(record.fields['直播筛选结果']) === '通过' ? 'pass' : 'pending'"
+              :class="searchResultCompleted(record) ? 'pass' : 'pending'"
             >
-              {{ normalizeText(record.fields['直播筛选结果']) || '未直播审核' }}
+              {{ searchResultStatus(record) }}
             </span>
           </button>
         </div>
@@ -1653,8 +1780,12 @@ onBeforeUnmount(() => {
                   {{
                     current.remote
                       ? currentAlreadyReviewed
-                        ? `已直播审核：${currentPersistedReviewResult} · 仅查看`
-                        : '飞书实时记录 · 审核结果可同步'
+                        ? currentPersistedReviewResult
+                          ? `已直播审核：${currentPersistedReviewResult} · 仅查看`
+                          : `灯牌总和已保存：${currentSavedLightboardTotal} · 仅查看`
+                        : isLightboardMode
+                          ? '灯牌专项审核 · 结果可同步'
+                          : '飞书实时记录 · 审核结果可同步'
                       : '已通过初筛 · 本地只读审核'
                   }}
                   <template v-if="current.remote && nextPrefetchLabel">
@@ -1788,6 +1919,7 @@ onBeforeUnmount(() => {
                 class="linked-question-block"
               >
                 <div
+                  v-if="!question.hideAnswer"
                   class="linked-response"
                   :class="{ empty: question.answer === '未填写' }"
                 >
@@ -1800,7 +1932,7 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
 
-                <template v-if="shouldShowEvidence(question.answer)">
+                <template v-if="shouldShowQuestionEvidence(question)">
                   <header class="linked-evidence-heading">
                     <span>Q{{ String(question.evidence.number).padStart(2, '0') }}</span>
                     <div>
@@ -1845,19 +1977,47 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <label class="review-note-panel">
+      <div class="review-note-panel" :class="{ lightboard: isLightboardMode }">
         <span>
-          <strong>直播筛选备注</strong>
-          <small>通过与不通过均会提交</small>
+          <strong>{{ isLightboardMode ? '灯牌总和' : '直播筛选备注' }}</strong>
+          <small>
+            {{
+              isLightboardMode
+                ? '两个灯牌数字相加，保存到飞书对应字段'
+                : '通过与不通过均会提交'
+            }}
+          </small>
         </span>
+        <input
+          v-if="isLightboardMode"
+          :value="reviewNote"
+          type="text"
+          inputmode="numeric"
+          maxlength="6"
+          aria-label="灯牌总和"
+          :disabled="currentAlreadyReviewed"
+          placeholder="例如：32"
+          @input="handleLightboardTotalInput"
+        >
         <textarea
+          v-else
           v-model="reviewNote"
           maxlength="500"
+          aria-label="直播筛选备注"
           :disabled="currentAlreadyReviewed"
           placeholder="填写本次审核说明（可选）"
         ></textarea>
-        <em>{{ reviewNote.length }} / 500</em>
-      </label>
+        <button
+          v-if="isLightboardMode"
+          type="button"
+          class="lightboard-save-button"
+          :disabled="decisionInputLocked || currentAlreadyReviewed"
+          @click="saveLightboardTotal"
+        >
+          保存并下一个
+        </button>
+        <em v-else>{{ reviewNote.length }} / 500</em>
+      </div>
 
       <div
         v-if="decisionSyncMessage"

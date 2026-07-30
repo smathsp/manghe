@@ -8,6 +8,7 @@ import ThanksPage from './ThanksPage.vue'
 import MailboxPage from './MailboxPage.vue'
 import VoidBoxPage from './VoidBoxPage.vue'
 import ScreeningPage from './ScreeningPage.vue'
+import LightboardScreeningPage from './LightboardScreeningPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -27,8 +28,12 @@ const isMailboxPage = isMailboxDomainRoot
   || normalizedPath.endsWith('/mail/index.html')
 const isScreeningPage = normalizedPath === '/screening'
   || normalizedPath.endsWith('/screening/index.html')
+const isLightboardScreeningPage = normalizedPath === '/screening/lightboard'
+  || normalizedPath.endsWith('/screening/lightboard/index.html')
 
-const RootComponent = isScreeningPage
+const RootComponent = isLightboardScreeningPage
+  ? LightboardScreeningPage
+  : isScreeningPage
   ? ScreeningPage
   : isMailboxPage
   ? MailboxPage
@@ -97,6 +102,14 @@ if (RootComponent === ScreeningPage) {
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
     '天火卡直播筛选页面，展示申请问答和原图并实时同步筛选结果。',
+  )
+}
+
+if (RootComponent === LightboardScreeningPage) {
+  document.title = '天火卡｜灯牌审核'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '天火卡灯牌专项审核页面，仅展示两张粉丝灯牌截图并同步灯牌总和。',
   )
 }
 
