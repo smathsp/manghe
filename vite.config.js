@@ -17,6 +17,7 @@ export default defineConfig({
         mail: 'mail/index.html',
         screening: 'screening/index.html',
         screeningLightboard: 'screening/lightboard/index.html',
+        blindboxReview: 'blindbox-review/index.html',
       },
     },
   },

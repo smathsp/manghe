@@ -9,6 +9,7 @@ import MailboxPage from './MailboxPage.vue'
 import VoidBoxPage from './VoidBoxPage.vue'
 import ScreeningPage from './ScreeningPage.vue'
 import LightboardScreeningPage from './LightboardScreeningPage.vue'
+import BlindBoxReviewPage from './BlindBoxReviewPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -30,8 +31,12 @@ const isScreeningPage = normalizedPath === '/screening'
   || normalizedPath.endsWith('/screening/index.html')
 const isLightboardScreeningPage = normalizedPath === '/screening/lightboard'
   || normalizedPath.endsWith('/screening/lightboard/index.html')
+const isBlindBoxReviewPage = normalizedPath === '/blindbox-review'
+  || normalizedPath.endsWith('/blindbox-review/index.html')
 
-const RootComponent = isLightboardScreeningPage
+const RootComponent = isBlindBoxReviewPage
+  ? BlindBoxReviewPage
+  : isLightboardScreeningPage
   ? LightboardScreeningPage
   : isScreeningPage
   ? ScreeningPage
@@ -110,6 +115,14 @@ if (RootComponent === LightboardScreeningPage) {
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
     '天火卡灯牌专项审核页面，仅展示两张粉丝灯牌截图并同步灯牌总和。',
+  )
+}
+
+if (RootComponent === BlindBoxReviewPage) {
+  document.title = '盲盒置换审核｜中奖置换确认'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    '盲盒中奖置换审核页面，逐条审核用户置换请求。',
   )
 }
 

@@ -1,6 +1,21 @@
 const FEISHU_ORIGIN = 'https://open.feishu.cn'
 const BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf'
 const TABLE_ID = 'tblVnUXJQUgpjcMi'
+
+// --- Blind Box Exchange Review ---
+const EXCHANGE_BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf' // TODO: update once resolved from wiki
+const EXCHANGE_TABLE_ID = 'tblVqVj7G7jZclVT'
+
+const EXCHANGE_SEARCH_FIELDS = [
+  '昵称',
+  '盲盒编号',
+  '中奖内容',
+  '你的选择',
+]
+
+const EXCHANGE_REVIEW_RESULT_FIELD = '直播筛选结果'
+const EXCHANGE_REVIEW_TIME_FIELD = '直播筛选时间'
+const EXCHANGE_REVIEW_NOTE_FIELD = '直播筛选备注'
 const MAX_BODY_BYTES = 32 * 1024
 const SEARCH_CACHE_TTL_MS = 30 * 1000
 const INITIAL_SCREEN_APPROVED_STATUSES = new Set([
@@ -637,6 +652,168 @@ const ATTACHMENT_FIELD_NAMES = new Set([
   '请提供张导的店会员等级截图',
 ])
 
+// --- Exchange review helpers ---
+
+function exchangeRecordSummary(record) {
+  const fields = record.fields || {}
+  return {
+    record_id: record.record_id,
+    created_time: record.created_time,
+    fields: Object.fromEntries(EXCHANGE_SEARCH_FIELDS.map((f) => [f, fields[f] ?? ''])),
+  }
+}
+
+function isExchangeReviewed(record) {
+  const fields = record.fields || {}
+  return Boolean(normalizeValue(fields[EXCHANGE_REVIEW_RESULT_FIELD]))
+}
+
+async function listExchangeRecords(token, extraParams = {}) {
+  const records = []
+  let pageToken = ''
+  let pageCount = 0
+
+  do {
+    const params = new URLSearchParams({
+      page_size: '500',
+      field_names: JSON.stringify([...EXCHANGE_SEARCH_FIELDS, EXCHANGE_REVIEW_RESULT_FIELD]),
+      ...extraParams,
+    })
+    if (pageToken) params.set('page_token', pageToken)
+
+    const payload = await feishuJson(
+      `/open-apis/bitable/v1/apps/${EXCHANGE_BASE_TOKEN}/tables/${EXCHANGE_TABLE_ID}/records?${params}`,
+      { token },
+    )
+    records.push(...(payload.data?.items || []))
+    pageToken = payload.data?.has_more ? payload.data?.page_token || '' : ''
+    pageCount += 1
+  } while (pageToken && pageCount < 20)
+
+  return records
+}
+
+async function getExchangeRecord(token, recordId) {
+  if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
+  const payload = await feishuJson(
+    `/open-apis/bitable/v1/apps/${EXCHANGE_BASE_TOKEN}/tables/${EXCHANGE_TABLE_ID}/records/${recordId}`,
+    { token },
+  )
+  return payload.data?.record
+}
+
+async function searchExchangeRecords(token, rawQuery) {
+  const query = normalizeSearch(rawQuery)
+  if (!query || query.length > 100) throw new Error('请输入 1–100 个字符进行搜索')
+
+  // Try exact match on box number first
+  if (/^\d{1,6}$/.test(query)) {
+    try {
+      const records = await listExchangeRecords(token, {
+        page_size: '100',
+        filter: `CurrentValue.[盲盒编号]="${query}"`,
+      })
+      if (records.length) {
+        return records.map(exchangeRecordSummary)
+      }
+    } catch {
+      // fall through to full search
+    }
+  }
+
+  // Search by nickname
+  const conditions = [
+    { field_name: '昵称', operator: 'contains', value: [String(rawQuery).trim()] },
+  ]
+
+  try {
+    const records = []
+    let pageToken = ''
+    let pageCount = 0
+    do {
+      const params = new URLSearchParams({ page_size: '100' })
+      if (pageToken) params.set('page_token', pageToken)
+      const payload = await feishuJson(
+        `/open-apis/bitable/v1/apps/${EXCHANGE_BASE_TOKEN}/tables/${EXCHANGE_TABLE_ID}/records/search?${params}`,
+        {
+          token,
+          method: 'POST',
+          body: {
+            field_names: [...EXCHANGE_SEARCH_FIELDS, EXCHANGE_REVIEW_RESULT_FIELD],
+            filter: { conjunction: 'or', conditions },
+          },
+        },
+      )
+      records.push(...(payload.data?.items || []))
+      pageToken = payload.data?.has_more ? payload.data?.page_token || '' : ''
+      pageCount += 1
+    } while (pageToken && pageCount < 5)
+
+    return records.map(exchangeRecordSummary).slice(0, 20)
+  } catch {
+    // Fallback: scan all records and filter locally
+    const allRecords = await listExchangeRecords(token)
+    const lowerQuery = query
+    return allRecords
+      .filter((r) => {
+        const fields = r.fields || {}
+        return EXCHANGE_SEARCH_FIELDS.some((f) =>
+          normalizeSearch(fields[f]).includes(lowerQuery),
+        )
+      })
+      .map(exchangeRecordSummary)
+      .slice(0, 20)
+  }
+}
+
+async function nextUnreviewedExchange(token, rawAfterNumber, rawExcludedRecordIds = []) {
+  const afterNumber = rawAfterNumber ? Number(rawAfterNumber) : 0
+  const excludedRecordIds = new Set(
+    (Array.isArray(rawExcludedRecordIds) ? rawExcludedRecordIds : [])
+      .map((v) => String(v || '').trim())
+      .filter((v) => /^rec[a-z0-9]+$/i.test(v))
+      .slice(0, 500),
+  )
+
+  const allRecords = await listExchangeRecords(token)
+  const candidate = allRecords.find((r) => {
+    if (excludedRecordIds.has(r.record_id)) return false
+    if (isExchangeReviewed(r)) return false
+    const number = Number(normalizeValue(r.fields?.['盲盒编号']))
+    return number > afterNumber
+  })
+
+  return candidate ? exchangeRecordSummary(candidate) : null
+}
+
+async function updateExchangeReview(token, recordId, result, rawNote) {
+  if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
+  if (!['通过', '不通过'].includes(result)) throw new Error('审核结果只能是"通过"或"不通过"')
+  const note = String(rawNote || '').trim().slice(0, 500)
+
+  const reviewTime = Date.now()
+  const fields = {
+    [EXCHANGE_REVIEW_RESULT_FIELD]: result,
+    [EXCHANGE_REVIEW_TIME_FIELD]: reviewTime,
+    [EXCHANGE_REVIEW_NOTE_FIELD]: note,
+  }
+
+  const payload = await feishuJson(
+    `/open-apis/bitable/v1/apps/${EXCHANGE_BASE_TOKEN}/tables/${EXCHANGE_TABLE_ID}/records/${recordId}`,
+    { token, method: 'PUT', body: { fields } },
+  )
+
+  return {
+    record_id: recordId,
+    result,
+    note,
+    review_time: reviewTime,
+    record: payload.data?.record,
+  }
+}
+
+// ---
+
 export async function handleApi(req, res, credentialDefaults = {}) {
   try {
     if (req.method !== 'POST') {
@@ -730,6 +907,41 @@ export async function handleApi(req, res, credentialDefaults = {}) {
         String(body.tmpUrl || ''),
       )
       sendJson(res, 200, { url })
+      return
+    }
+
+    // --- Exchange review endpoints ---
+
+    if (pathname === '/api/feishu/exchange-search') {
+      const records = await searchExchangeRecords(token, body.query)
+      sendJson(res, 200, { records })
+      return
+    }
+
+    if (pathname === '/api/feishu/exchange-record') {
+      const record = await getExchangeRecord(token, String(body.recordId || ''))
+      sendJson(res, 200, { record })
+      return
+    }
+
+    if (pathname === '/api/feishu/exchange-next') {
+      const record = await nextUnreviewedExchange(
+        token,
+        body.afterNumber,
+        body.excludeRecordIds,
+      )
+      sendJson(res, 200, { record })
+      return
+    }
+
+    if (pathname === '/api/feishu/exchange-review') {
+      const data = await updateExchangeReview(
+        token,
+        String(body.recordId || ''),
+        String(body.result || '').trim(),
+        body.note,
+      )
+      sendJson(res, 200, data)
       return
     }
 

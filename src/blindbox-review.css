@@ -1,0 +1,204 @@
+/* Blind Box Fulfillment Review */
+@keyframes ex-float { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
+@keyframes ex-ring { 0% { transform:scale(.94); opacity:.8 } 50% { transform:scale(1.06); opacity:1 } 100% { transform:scale(1); opacity:.8 } }
+
+/* Ensure body scrolls on this page */
+body { overflow: auto !important; height: auto !important; }
+
+.ex-page {
+  --gold: #d3a863;
+  position:relative; min-height:100vh;
+  color:#ede6d9; font-size:16px;
+  background:
+    radial-gradient(circle at 15% 6%, rgba(149,97,64,.18), transparent 28rem),
+    radial-gradient(circle at 85% 32%, rgba(72,77,67,.2), transparent 32rem),
+    linear-gradient(155deg, #211713 0%, #100e0d 48%, #16130f 100%);
+  font-family: "PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+.ex-page::before, .ex-page::after {
+  position:absolute; z-index:0; content:""; width:34rem; height:34rem;
+  border:1px solid rgba(211,168,99,.08); border-radius:50%; pointer-events:none;
+}
+.ex-page::before { top:-22rem; left:-12rem }
+.ex-page::after { right:-16rem; bottom:8rem }
+
+.ex-grain {
+  position:fixed; z-index:1; inset:0; opacity:.1; pointer-events:none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+.ex-top, .ex-hero, .ex-bar, .ex-record, .ex-decisions, .ex-hint, .ex-footer { position:relative; z-index:2 }
+
+/* top bar */
+.ex-top {
+  width:min(960px, calc(100% - 48px)); margin:0 auto; height:72px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid rgba(231,219,199,.13);
+}
+.ex-logo { display:inline-flex; align-items:center; gap:10px; color:#e9decb; font-size:15px; letter-spacing:.15em; text-decoration:none }
+.ex-logo span:first-child { display:grid; width:28px; height:28px; place-items:center; color:#211915; background:var(--gold); border-radius:50% }
+.ex-top-note { color:rgba(233,222,203,.48); font-family:Georgia,serif; font-size:13px; letter-spacing:.14em; text-transform:uppercase }
+
+/* hero / import */
+.ex-hero { text-align:center; padding:60px 24px 40px }
+.ex-eyebrow { color:var(--gold); font-family:Georgia,serif; font-size:13px; letter-spacing:.32em; margin-bottom:16px }
+.ex-hero h1 { color:#eee4d3; font-family:"FangSong","STFangsong","Songti SC",serif; font-size:clamp(36px,5vw,56px); font-weight:400; letter-spacing:-.03em; margin:0 }
+.ex-hero h1 span { display:block; color:var(--gold); font-style:italic }
+.ex-desc { margin-top:16px; color:rgba(237,230,217,.56); font-family:"Songti SC",serif; font-size:16px; line-height:2 }
+
+.ex-drop {
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  width:min(480px, calc(100% - 48px)); margin:28px auto 0;
+  padding:44px 24px; border:2px dashed rgba(211,168,99,.2); border-radius:18px;
+  cursor:pointer; transition:all .25s; background:rgba(20,14,11,.3);
+}
+.ex-drop:hover, .ex-drop.has { border-color:rgba(211,168,99,.45); background:rgba(211,168,99,.04) }
+.ex-drop input { display:none }
+.ex-drop-icon { font-size:40px }
+.ex-drop strong { color:#eee4d3; font-size:17px }
+.ex-drop small { color:rgba(237,230,217,.4); font-size:14px }
+.ex-msg { margin-top:18px; font-size:15px; padding:10px 16px; border-radius:8px; text-align:center }
+.ex-msg.loading { color:rgba(237,230,217,.5); background:rgba(211,168,99,.06) }
+.ex-msg.error { color:#cc7b77; background:rgba(184,84,80,.08); border:1px solid rgba(184,84,80,.2) }
+.ex-msg.ready { color:rgba(237,230,217,.55) }
+
+/* stats bar */
+.ex-bar {
+  width:min(880px, calc(100% - 48px)); margin:0 auto 20px;
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:12px 20px; border:1px solid rgba(211,168,99,.12); border-radius:10px;
+  background:rgba(20,14,11,.6);
+}
+.ex-bar-stats { display:flex; align-items:center; gap:18px; flex-wrap:wrap }
+.ex-bar-stats > div { display:flex; align-items:center; gap:5px }
+.ex-bar-stats strong { color:var(--gold); font-family:Georgia,serif; font-size:22px; font-weight:400 }
+.ex-bar-stats span { color:rgba(237,230,217,.45); font-size:13px }
+.ex-bar-stats i { width:1px; height:18px; background:rgba(211,168,99,.2) }
+.ex-bar-btns { display:flex; gap:8px; margin-left:auto }
+.ex-bar-btns button, .ex-bar-btn-reimport {
+  padding:8px 16px; border:1px solid rgba(211,168,99,.25); border-radius:7px;
+  background:transparent; color:#e9decb; font-size:14px; letter-spacing:.06em;
+  cursor:pointer; transition:all .2s;
+}
+.ex-bar-btn-reimport input { display:none }
+.ex-bar-btns button:hover:not(:disabled), .ex-bar-btn-reimport:hover { border-color:var(--gold); color:var(--gold) }
+.ex-bar-btns button:disabled { opacity:.3; cursor:not-allowed }
+
+/* record card */
+.ex-record {
+  width:min(880px, calc(100% - 48px)); margin:0 auto;
+  border:1px solid rgba(211,168,99,.1); border-radius:20px;
+  background:linear-gradient(135deg, rgba(40,28,21,.9), rgba(24,16,12,.92));
+  box-shadow:0 20px 60px rgba(0,0,0,.3); overflow:hidden; transition:border-color .3s;
+}
+.ex-record.dec-approve { border-color:rgba(91,140,90,.35); box-shadow:0 20px 60px rgba(0,0,0,.3), 0 0 0 1px rgba(91,140,90,.08) }
+.ex-record.dec-reject { border-color:rgba(184,84,80,.35); box-shadow:0 20px 60px rgba(0,0,0,.3), 0 0 0 1px rgba(184,84,80,.08) }
+
+/* nav */
+.ex-nav {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 24px; border-bottom:1px solid rgba(211,168,99,.08); background:rgba(20,14,11,.4);
+}
+.ex-nav button {
+  display:inline-flex; align-items:center; gap:4px; padding:8px 16px;
+  border:1px solid rgba(211,168,99,.2); border-radius:7px;
+  background:transparent; color:#e9decb; font-size:15px; cursor:pointer; transition:all .2s;
+}
+.ex-nav button:hover:not(:disabled) { border-color:var(--gold); color:var(--gold) }
+.ex-nav button:disabled { opacity:.3; cursor:not-allowed }
+.ex-nav strong { color:var(--gold); font-family:Georgia,serif; font-size:18px }
+
+/* head */
+.ex-head { display:flex; align-items:center; gap:20px; padding:28px 28px 0 }
+.ex-avatar { display:grid; width:60px; height:60px; place-items:center; flex-shrink:0; border:1px solid rgba(211,168,99,.25); border-radius:50%; color:var(--gold); font-size:24px; font-weight:600; background:rgba(211,168,99,.06) }
+.ex-head-main { flex:1; min-width:0 }
+.ex-head-main h1 { color:#eee4d3; font-size:26px; font-weight:600; letter-spacing:.02em; line-height:1.3 }
+.ex-head-main p { margin-top:6px; color:rgba(237,230,217,.4); font-size:15px }
+.ex-tag { display:inline-flex; padding:3px 12px; border-radius:14px; font-size:13px; font-weight:600; margin-left:8px }
+.ex-tag.tg { border:1px solid rgba(91,140,90,.3); background:rgba(91,140,90,.1); color:#7db87b }
+.ex-tag.tr { border:1px solid rgba(184,84,80,.3); background:rgba(184,84,80,.1); color:#cc7b77 }
+.ex-head-side { display:flex; gap:14px; flex-shrink:0 }
+.ex-kv { display:flex; flex-direction:column; align-items:center; gap:3px; padding:10px 16px; border:1px solid rgba(211,168,99,.1); border-radius:8px; background:rgba(20,14,11,.4) }
+.ex-kv small { color:rgba(237,230,217,.3); font-size:12px; letter-spacing:.1em }
+.ex-kv strong { color:rgba(237,230,217,.7); font-size:15px }
+.ex-kv strong.gold { color:var(--gold) }
+
+/* scores */
+.ex-scores { display:flex; gap:12px; padding:24px 28px 0 }
+.ex-score { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px; border:1px solid rgba(211,168,99,.08); border-radius:10px; background:rgba(20,14,11,.35) }
+.ex-score small { color:rgba(237,230,217,.3); font-size:12px; letter-spacing:.08em }
+.ex-score strong { color:rgba(237,230,217,.75); font-size:24px }
+.ex-score em { font-style:normal; font-size:14px; color:rgba(237,230,217,.35); margin-left:2px }
+
+/* answers */
+.ex-answers { padding:24px 28px 28px }
+.ex-answer { padding:18px 20px; border:1px solid rgba(211,168,99,.07); border-radius:10px; background:rgba(20,14,11,.3); margin-bottom:10px }
+.ex-answer small { display:block; margin-bottom:8px; color:var(--gold); font-family:Georgia,serif; font-size:12px; letter-spacing:.2em }
+.ex-answer p { color:rgba(237,230,217,.65); font-size:16px; line-height:1.9; letter-spacing:.03em; white-space:pre-wrap; word-break:break-word }
+.ex-answer.ex-exchange { border-color:rgba(211,168,99,.22); background:rgba(211,168,99,.04) }
+
+/* review note */
+.ex-note { margin-bottom:10px }
+.ex-note label { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px }
+.ex-note label span { color:rgba(237,230,217,.45); font-size:14px }
+.ex-note label em { color:rgba(237,230,217,.22); font-size:13px }
+.ex-note textarea { width:100%; min-height:72px; padding:12px 16px; border:1px solid rgba(211,168,99,.15); border-radius:8px; background:rgba(20,14,11,.6); color:#e9decb; font-size:15px; line-height:1.7; resize:vertical; transition:border-color .2s }
+.ex-note textarea:focus { outline:none; border-color:var(--gold) }
+.ex-note textarea::placeholder { color:rgba(237,230,217,.22) }
+
+/* decision buttons */
+.ex-decisions {
+  width:min(880px, calc(100% - 48px)); margin:14px auto; display:flex; gap:14px;
+}
+.ex-dbtn {
+  flex:1; display:flex; align-items:center; justify-content:center; gap:10px;
+  padding:20px 24px; border:1px solid rgba(211,168,99,.15); border-radius:14px;
+  background:rgba(20,14,11,.5); color:#e9decb; font-size:20px; font-weight:700;
+  letter-spacing:.06em; cursor:pointer; transition:all .25s;
+}
+.ex-dbtn:hover { transform:translateY(-2px) }
+.ex-dbtn span { font-size:26px }
+.ex-dbtn.approve { border-color:rgba(91,140,90,.25) }
+.ex-dbtn.approve:hover { border-color:rgba(91,140,90,.5); background:rgba(91,140,90,.1) }
+.ex-dbtn.approve.sel { border-color:rgba(91,140,90,.5); background:rgba(91,140,90,.16); color:#9ddc9c; box-shadow:0 0 24px rgba(91,140,90,.08) }
+.ex-dbtn.reject { border-color:rgba(184,84,80,.25) }
+.ex-dbtn.reject:hover { border-color:rgba(184,84,80,.5); background:rgba(184,84,80,.1) }
+.ex-dbtn.reject.sel { border-color:rgba(184,84,80,.5); background:rgba(184,84,80,.16); color:#e8a3a0; box-shadow:0 0 24px rgba(184,84,80,.08) }
+
+.ex-hint { text-align:center; padding:18px 0 50px; color:rgba(237,230,217,.2); font-size:13px; letter-spacing:.08em }
+
+/* reveal overlay */
+.ex-reveal {
+  position:fixed; inset:0; z-index:100; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:16px;
+  background:rgba(16,13,12,.92); backdrop-filter:blur(8px); animation:ex-float .3s both;
+}
+.ex-reveal-icon { width:96px; height:96px; border-radius:50%; display:grid; place-items:center; font-size:48px; animation:ex-ring .5s ease-out }
+.ex-reveal.approve .ex-reveal-icon { border:2px solid rgba(91,140,90,.4); background:rgba(91,140,90,.12); color:#9ddc9c }
+.ex-reveal.reject .ex-reveal-icon { border:2px solid rgba(184,84,80,.4); background:rgba(184,84,80,.12); color:#e8a3a0 }
+.ex-reveal strong { font-size:34px; font-weight:600; letter-spacing:.06em; color:#eee4d3 }
+.ex-reveal small { color:rgba(237,230,217,.45); font-size:15px; letter-spacing:.08em }
+
+/* footer */
+.ex-footer { width:min(880px, calc(100% - 48px)); margin:0 auto; padding:28px 0 50px; border-top:1px solid rgba(231,219,199,.08); text-align:center }
+.ex-footer p { color:rgba(237,230,217,.3); font-size:14px; font-family:"Songti SC",serif; margin:0 0 10px }
+.ex-footer a { color:var(--gold); font-size:14px; letter-spacing:.1em; text-decoration:none }
+
+@media (max-width:640px) {
+  .ex-hero { padding:40px 16px 28px }
+  .ex-hero h1 { font-size:32px }
+  .ex-bar { flex-direction:column; align-items:stretch }
+  .ex-bar-stats { justify-content:center }
+  .ex-bar-btns { margin-left:0; justify-content:center }
+  .ex-head { flex-wrap:wrap; padding:20px 18px 0; gap:14px }
+  .ex-head-main h1 { font-size:22px }
+  .ex-head-side { width:100% }
+  .ex-kv { flex:1 }
+  .ex-scores { padding:18px 18px 0; gap:8px }
+  .ex-answers { padding:18px 18px 24px }
+  .ex-answer p { font-size:15px }
+  .ex-nav { padding:12px 18px }
+  .ex-nav button { font-size:14px }
+  .ex-decisions { flex-direction:column; gap:10px }
+  .ex-dbtn { padding:16px 20px; font-size:18px }
+}
