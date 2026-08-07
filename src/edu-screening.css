@@ -161,23 +161,48 @@ button { color: inherit; }
 .console-heading small::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
 .console-heading small.offline { color: var(--orange); }
 
-.edu-search { margin-top: 30px; }
-.edu-search > label { display: block; margin-bottom: 9px; color: #819d97; font-size: 11px; font-weight: 700; }
-.edu-search > div { display: flex; gap: 8px; }
-.edu-search input {
+.password-panel {
+  margin-top: 24px;
+  padding: 14px;
+  border: 1px solid rgba(199, 237, 98, .16);
+  border-radius: 14px;
+  background: rgba(199, 237, 98, .035);
+}
+.password-panel > label,
+.edu-search-card > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  color: #a9bfba;
+  font-size: 10px;
+  font-weight: 800;
+}
+.password-panel label small,
+.edu-search-card label small { color: #647f79; font-size: 8px; font-weight: 600; }
+.password-row { display: flex; align-items: center; gap: 10px; }
+.password-row > input,
+.edu-search-card input {
   min-width: 0;
-  height: 52px;
+  height: 46px;
   flex: 1;
   padding: 0 16px;
   border: 1px solid rgba(171, 216, 198, .2);
-  border-radius: 13px;
+  border-radius: 11px;
   outline: none;
   color: #edf7f2;
   background: rgba(2, 17, 18, .48);
 }
-.edu-search input:focus { border-color: rgba(101, 214, 202, .7); box-shadow: 0 0 0 3px rgba(101,214,202,.1); }
-.edu-search button { padding: 0 20px; border: 0; border-radius: 13px; color: #06201d; background: var(--cyan); font-weight: 900; cursor: pointer; }
-.edu-search button:disabled, .next-candidate:disabled { opacity: .55; cursor: wait; }
+.password-row > input:focus,
+.edu-search-card input:focus { border-color: rgba(101, 214, 202, .7); box-shadow: 0 0 0 3px rgba(101,214,202,.1); }
+.remember-password { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: #94aca6; font-size: 9px; cursor: pointer; }
+.remember-password input { width: 14px; height: 14px; accent-color: var(--acid); }
+.edu-search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.edu-search-card { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: rgba(2,17,18,.26); }
+.edu-search-card > div { display: flex; gap: 7px; }
+.edu-search-card input { width: 100%; height: 42px; padding: 0 11px; font-size: 11px; }
+.edu-search-card button { flex: 0 0 auto; padding: 0 13px; border: 0; border-radius: 10px; color: #06201d; background: var(--cyan); font-size: 10px; font-weight: 900; cursor: pointer; }
+.edu-search-card button:disabled, .next-candidate:disabled { opacity: .55; cursor: wait; }
 
 .next-candidate {
   display: flex;
@@ -366,8 +391,9 @@ button { color: inherit; }
   .entry-copy > p { width: 100%; font-size: 14px; }
   .entry-rules { flex-direction: column; gap: 10px; margin-top: 30px; }
   .entry-console { padding: 34px 18px 48px; }
-  .edu-search > div { flex-direction: column; }
-  .edu-search button { height: 44px; }
+  .password-row { align-items: stretch; flex-direction: column; }
+  .remember-password { min-height: 26px; }
+  .edu-search-grid { grid-template-columns: 1fr; }
   .candidate-facts, .story-grid, .commitment-columns { grid-template-columns: 1fr; }
   .dossier-hero { align-items: start; flex-direction: column; gap: 12px; }
   .proof-grid { grid-template-columns: 1fr; }

@@ -1,8 +1,12 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import './edu-screening.css'
 
-const query = ref('')
+const phoneQuery = ref('')
+const douyinQuery = ref('')
+const accessKey = ref('')
+const rememberPassword = ref(false)
+const lastSearchType = ref('')
 const results = ref([])
 const current = ref(null)
 const currentSummary = ref(null)
@@ -16,6 +20,7 @@ const imageUrls = ref(new Map())
 const imageState = ref(new Map())
 const lightbox = ref(null)
 const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+const PASSWORD_STORAGE_KEY = 'manghe-edu-screening-access-key'
 
 const PROOF_FIELDS = [
   { key: '真实校园证明', label: '真实校园证明', for: 'all' },
@@ -112,7 +117,7 @@ async function api(path, body = {}, blob = false) {
   const response = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ accessKey: accessKey.value, ...body }),
   })
   if (blob) {
     if (!response.ok) {
@@ -122,7 +127,7 @@ async function api(path, body = {}, blob = false) {
     return response.blob()
   }
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message || '连接本地飞书 CLI 失败')
+  if (!response.ok) throw new Error(data.message || '连接飞书审核服务失败')
   return data
 }
 
@@ -130,26 +135,37 @@ function updateStats(value) {
   if (value) stats.value = value
 }
 
-async function search() {
-  if (!query.value.trim()) {
-    message.value = '请输入编号、学校、手机号或抖音昵称'
+function ensurePassword() {
+  if (accessKey.value) return true
+  searchState.value = 'error'
+  message.value = '请先输入审核密码'
+  return false
+}
+
+async function search(type) {
+  if (!ensurePassword()) return
+  const query = type === 'phone' ? phoneQuery.value.trim() : douyinQuery.value.trim()
+  if (!query) {
+    message.value = type === 'phone' ? '请输入手机号' : '请输入抖音昵称'
     return
   }
+  lastSearchType.value = type
   searchState.value = 'loading'
   message.value = '正在从飞书读取申请人…'
   try {
-    const data = await api('/api/edu/search', { query: query.value.trim() })
+    const data = await api('/api/edu/search', { type, query })
     results.value = data.records || []
     updateStats(data.stats)
     searchState.value = 'ready'
     message.value = results.value.length ? `找到 ${results.value.length} 位申请人` : '没有匹配的申请人'
   } catch (error) {
     searchState.value = 'error'
-    message.value = isLocal ? error.message : '当前是页面预览；请在本地启动项目以连接飞书 CLI'
+    message.value = error.message
   }
 }
 
 async function openNext() {
+  if (!ensurePassword()) return
   if (searchState.value === 'loading') return
   searchState.value = 'loading'
   message.value = '正在寻找下一位未审核申请人…'
@@ -164,7 +180,7 @@ async function openNext() {
     await openRecord(data.record)
   } catch (error) {
     searchState.value = 'error'
-    message.value = isLocal ? error.message : '当前是页面预览；请在本地启动项目以连接飞书 CLI'
+    message.value = error.message
   }
 }
 
@@ -184,7 +200,8 @@ async function openRecord(summary) {
     currentSummary.value = summary
     reviewNote.value = normalize(data.record.fields?.['EDU审核备注'])
     results.value = []
-    query.value = ''
+    phoneQuery.value = ''
+    douyinQuery.value = ''
     searchState.value = 'ready'
     message.value = ''
     await nextTick()
@@ -277,7 +294,22 @@ function onKeydown(event) {
   if (event.key === '3') saveReview('不通过')
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
+watch([accessKey, rememberPassword], () => {
+  if (rememberPassword.value && accessKey.value) {
+    window.localStorage.setItem(PASSWORD_STORAGE_KEY, accessKey.value)
+  } else {
+    window.localStorage.removeItem(PASSWORD_STORAGE_KEY)
+  }
+})
+
+onMounted(() => {
+  const savedPassword = window.localStorage.getItem(PASSWORD_STORAGE_KEY)
+  if (savedPassword) {
+    accessKey.value = savedPassword
+    rememberPassword.value = true
+  }
+  window.addEventListener('keydown', onKeydown)
+})
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   revokeImages()
@@ -305,7 +337,7 @@ onBeforeUnmount(() => {
       <div class="entry-copy">
         <span class="entry-kicker"><i></i> EDU ACCESS · 2026</span>
         <h1>把真正需要的人，<br><em>先找出来。</em></h1>
-        <p>先验学生身份，再看真实需求与反馈意愿。审核结果会通过本地 CLI 同步回飞书。</p>
+        <p>先验学生身份，再看真实需求与反馈意愿。审核结果通过安全服务同步回飞书。</p>
         <div class="entry-rules">
           <span><b>01</b> 身份真实</span>
           <span><b>02</b> 需求明确</span>
@@ -317,22 +349,58 @@ onBeforeUnmount(() => {
         <div class="console-heading">
           <span>REVIEW QUEUE</span>
           <strong>学生申请队列</strong>
-          <small :class="{ offline: !isLocal }">{{ isLocal ? '本地 CLI 已就绪' : '在线设计预览' }}</small>
+          <small>{{ isLocal ? '本地 CLI 已就绪' : 'Vercel 安全连接' }}</small>
         </div>
 
-        <form class="edu-search" @submit.prevent="search">
-          <label for="edu-search-input">查找申请人</label>
-          <div>
+        <div class="password-panel">
+          <label for="edu-access-key"><span>审核密码</span><small>独立验证，不与查询内容一起保存</small></label>
+          <div class="password-row">
             <input
-              id="edu-search-input"
-              v-model.trim="query"
-              type="search"
-              autocomplete="off"
-              placeholder="编号 / 学校 / 手机号 / 抖音昵称"
+              id="edu-access-key"
+              v-model="accessKey"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入审核访问密码"
             >
-            <button type="submit" :disabled="searchState === 'loading'">搜索</button>
+            <label class="remember-password">
+              <input v-model="rememberPassword" type="checkbox">
+              <span>保存在本机</span>
+            </label>
           </div>
-        </form>
+        </div>
+
+        <div class="edu-search-grid">
+          <form class="edu-search-card" @submit.prevent="search('phone')">
+            <label for="edu-phone-search"><span>手机号查找</span><small>结果只显示 ***</small></label>
+            <div>
+              <input
+                id="edu-phone-search"
+                v-model.trim="phoneQuery"
+                type="tel"
+                inputmode="numeric"
+                autocomplete="off"
+                maxlength="11"
+                placeholder="输入 11 位手机号"
+              >
+              <button type="submit" :disabled="searchState === 'loading'">查找</button>
+            </div>
+          </form>
+
+          <form class="edu-search-card" @submit.prevent="search('douyin')">
+            <label for="edu-douyin-search"><span>抖音昵称查找</span><small>支持昵称模糊匹配</small></label>
+            <div>
+              <input
+                id="edu-douyin-search"
+                v-model.trim="douyinQuery"
+                type="search"
+                autocomplete="off"
+                maxlength="50"
+                placeholder="输入抖音昵称"
+              >
+              <button type="submit" :disabled="searchState === 'loading'">查找</button>
+            </div>
+          </form>
+        </div>
 
         <button class="next-candidate" type="button" :disabled="searchState === 'loading'" @click="openNext">
           <span><small>NEXT CANDIDATE</small><strong>打开下一位未审核学生</strong></span>
@@ -344,14 +412,14 @@ onBeforeUnmount(() => {
         <div v-if="results.length" class="edu-results">
           <button v-for="record in results" :key="record.record_id" type="button" @click="openRecord(record)">
             <span class="result-no">#{{ record.number }}</span>
-            <span class="result-copy"><strong>{{ record.school }}</strong><small>{{ record.category }} · {{ record.phone || record.douyin || '未留检索信息' }}</small></span>
+            <span class="result-copy"><strong>{{ record.school }}</strong><small>{{ record.category }} · {{ lastSearchType === 'douyin' ? (record.douyin || '未填写抖音昵称') : (record.phone || '***') }}</small></span>
             <em :class="{ reviewed: record.review_result }">{{ record.review_result || '待审核' }}</em>
           </button>
         </div>
 
         <div class="console-footnote">
           <span>审核原则</span>
-          <p>不公开手机号、定位和证明材料；只在当前本地页面读取。</p>
+          <p>手机号由服务端直接替换为 ***；审核密码只在选择后保存在当前浏览器。</p>
         </div>
       </div>
     </section>

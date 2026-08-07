@@ -105,8 +105,7 @@ function normalizeSearch(value) {
 
 function maskPhone(value) {
   const phone = normalizeValue(value).replace(/\D/g, '')
-  if (phone.length !== 11) return phone ? `${phone.slice(0, 3)}****${phone.slice(-2)}` : ''
-  return `${phone.slice(0, 3)}****${phone.slice(-4)}`
+  return phone ? '***' : ''
 }
 
 function recordNumber(record) {
@@ -168,20 +167,16 @@ function statsFor(records) {
   }
 }
 
-async function searchRecords(rawQuery) {
+async function searchRecords(type, rawQuery) {
   const query = normalizeSearch(rawQuery)
-  if (!query || query.length > 80) throw new Error('请输入编号、学校、手机号或抖音昵称')
+  if (type === 'phone' && !/^1[3-9]\d{9}$/.test(query)) throw new Error('请输入正确的 11 位手机号')
+  if (type === 'douyin' && (!query || query.length > 50)) throw new Error('请输入 1–50 个字符的抖音昵称')
+  if (!['phone', 'douyin'].includes(type)) throw new Error('查询类型不正确')
   const records = await listIndexRecords()
   const matches = records.filter((record) => {
     const fields = record.fields || {}
-    if (/^\d{1,6}$/.test(query)) {
-      return normalizeSearch(fields['编号']) === query
-    }
-    return [
-      fields['你的微信手机号'],
-      fields['你的学校名称是？'],
-      fields['你的抖音昵称'],
-    ].some((value) => normalizeSearch(value).includes(query))
+    if (type === 'phone') return normalizeSearch(fields['你的微信手机号']) === query
+    return normalizeSearch(fields['你的抖音昵称']).includes(query)
   })
   return { records: matches.slice(0, 30).map(recordSummary), stats: statsFor(records) }
 }
@@ -207,6 +202,8 @@ async function getRecord(recordId) {
   ])
   const record = tableRows(payload)[0]
   if (!record) throw new Error('没有找到这条申请记录')
+  if (normalizeValue(record.fields?.['你的微信手机号'])) record.fields['你的微信手机号'] = '***'
+  if (record.fields) delete record.fields['提交人']
   return record
 }
 
@@ -315,7 +312,7 @@ async function handleApi(req, res) {
     const pathname = new URL(req.url || '/', 'http://localhost').pathname
 
     if (pathname === '/api/edu/search') {
-      sendJson(res, 200, await searchRecords(body.query))
+      sendJson(res, 200, await searchRecords(String(body.type || ''), body.query))
       return
     }
     if (pathname === '/api/edu/next') {
