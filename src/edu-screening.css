@@ -113,9 +113,6 @@ button { color: inherit; }
 
 .topbar-actions { display: flex; align-items: center; justify-self: end; gap: 8px; }
 .topbar-actions .topbar-action { justify-self: auto; }
-.live-page-link { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; white-space: nowrap; }
-.live-page-link i { width: 8px; height: 8px; border-radius: 50%; background: #6f8580; }
-.live-page-link i.connected { background: var(--acid); box-shadow: 0 0 12px rgba(199,237,98,.55); }
 
 .edu-entry {
   position: relative;
@@ -301,9 +298,8 @@ button { color: inherit; }
 .dossier-hero { display: flex; align-items: end; justify-content: space-between; margin-bottom: 24px; }
 .dossier-hero span, .section-title small, .story-card header small { color: #64837d; font-size: 8px; font-weight: 900; letter-spacing: .2em; }
 .dossier-hero h2 { margin: 5px 0 0; font-size: 30px; letter-spacing: -.04em; }
-.proof-pill { display: flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid rgba(199,237,98,.2); border-radius: 999px; color: #cae88d; background: rgba(199,237,98,.08); font-size: 10px; font-weight: 800; }
-.proof-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.proof-pill.warning { border-color: rgba(242,162,94,.25); color: var(--orange); background: rgba(242,162,94,.08); }
+.text-only-pill { display: flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid rgba(199,237,98,.2); border-radius: 999px; color: #cae88d; background: rgba(199,237,98,.08); font-size: 10px; font-weight: 800; }
+.text-only-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
 .initial-review-card { margin-bottom: 14px; padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: rgba(13,39,41,.8); }
 .initial-review-card > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
@@ -317,7 +313,7 @@ button { color: inherit; }
 .initial-review-card > div > span { color: var(--orange); font-size: 11px; font-weight: 800; }
 .initial-review-card > div > p { margin: 8px 0 0; color: #d7e4e0; font-size: 16px; line-height: 1.8; white-space: pre-wrap; }
 
-.story-card, .issue-section, .proof-section, .commitment-section { border: 1px solid var(--line); border-radius: 18px; background: rgba(13,39,41,.75); }
+.story-card, .issue-section, .commitment-section { border: 1px solid var(--line); border-radius: 18px; background: rgba(13,39,41,.75); }
 .story-card { padding: 22px; }
 .primary-story { position: relative; overflow: hidden; border-color: rgba(101,214,202,.2); background: linear-gradient(135deg, rgba(17,57,58,.95), rgba(11,38,40,.8)); }
 .primary-story::after { content: "EDU"; position: absolute; right: -14px; bottom: -32px; color: rgba(101,214,202,.035); font-size: 120px; font-weight: 900; }
@@ -326,25 +322,11 @@ button { color: inherit; }
 .story-card header h3, .section-title h3 { margin: 3px 0 0; font-size: 14px; }
 .story-card > p { position: relative; z-index: 1; margin: 18px 0 0; color: #c5d8d2; font-family: Georgia, "Songti SC", serif; font-size: 16px; line-height: 1.85; white-space: pre-wrap; }
 
-.issue-section, .proof-section, .commitment-section { margin-top: 14px; padding: 22px; }
+.issue-section, .commitment-section { margin-top: 14px; padding: 22px; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .tag-list span { padding: 8px 11px; border: 1px solid rgba(101,214,202,.18); border-radius: 9px; color: #a9d8cf; background: rgba(101,214,202,.06); font-size: 11px; }
 .tag-list em { color: #708b85; font-size: 11px; font-style: normal; }
 .supplement { margin: 15px 0 0; padding: 12px; border-left: 2px solid var(--orange); color: #aabfba; background: rgba(242,162,94,.04); font-size: 12px; line-height: 1.7; }
-
-.proof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 15px; }
-.proof-card { min-width: 0; padding: 13px; border: 1px solid rgba(181,216,202,.12); border-radius: 13px; background: rgba(3,19,20,.33); }
-.proof-card > header { display: flex; align-items: center; justify-content: space-between; }
-.proof-card > header span { font-size: 11px; font-weight: 800; }
-.proof-card > header em { color: var(--cyan); font-size: 9px; font-style: normal; }
-.proof-card.empty { border-style: dashed; }
-.proof-card > p { margin: 20px 0 9px; color: #667f79; font-size: 10px; }
-.proof-images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-.proof-images button { position: relative; aspect-ratio: 1.1; min-width: 0; overflow: hidden; padding: 0; border: 0; border-radius: 10px; background: #07191b; cursor: zoom-in; }
-.proof-images img { width: 100%; height: 100%; object-fit: cover; }
-.proof-images button > span { display: grid; height: 100%; place-items: center; color: #78918b; font-size: 10px; }
-.proof-images button > span.image-loading::after { content: ""; width: 16px; height: 16px; border: 2px solid rgba(101,214,202,.18); border-top-color: var(--cyan); border-radius: 50%; animation: spin .8s linear infinite; }
-.proof-images small { position: absolute; inset: auto 0 0; overflow: hidden; padding: 17px 7px 6px; color: #dce9e5; background: linear-gradient(transparent, rgba(0,0,0,.82)); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 
 .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
 .story-grid .story-card > p { color: #aebfba; font-family: inherit; font-size: 12px; line-height: 1.75; }
@@ -386,11 +368,6 @@ button { color: inherit; }
 .shortcut-tip span { width: 100%; }
 .shortcut-tip b { padding: 4px 6px; border-radius: 5px; background: rgba(255,255,255,.04); font-weight: 600; }
 
-.edu-lightbox { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 40px; background: rgba(2,11,12,.94); cursor: zoom-out; backdrop-filter: blur(12px); }
-.edu-lightbox img { max-width: min(1100px, 92vw); max-height: 82vh; border-radius: 14px; object-fit: contain; box-shadow: 0 30px 100px rgba(0,0,0,.55); }
-.edu-lightbox p { position: fixed; bottom: 20px; margin: 0; color: #dceae6; font-size: 12px; }
-.edu-lightbox p span { margin-left: 14px; color: #6e8882; }
-
 @media (max-width: 1180px) {
   .review-workspace { grid-template-columns: 230px minmax(470px, 1fr) 278px; }
   .entry-copy { padding-left: 52px; padding-right: 52px; }
@@ -426,8 +403,6 @@ button { color: inherit; }
   .edu-search-grid { grid-template-columns: 1fr; }
   .candidate-facts, .story-grid, .commitment-columns { grid-template-columns: 1fr; }
   .dossier-hero { align-items: start; flex-direction: column; gap: 12px; }
-  .proof-grid { grid-template-columns: 1fr; }
-  .edu-lightbox { padding: 16px; }
 }
 
 /* Simplified single-column review flow */
@@ -530,10 +505,8 @@ body { overflow-y: auto; }
 
 .dossier { padding: 28px 0 18px; }
 .dossier-hero { margin: 0 2px 18px; }
-.story-card, .issue-section, .proof-section, .commitment-section { border-radius: 14px; }
+.story-card, .issue-section, .commitment-section { border-radius: 14px; }
 .story-grid { grid-template-columns: 1fr; }
-.proof-grid { grid-template-columns: 1fr; }
-.proof-images { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .commitment-columns { grid-template-columns: 1fr; gap: 18px; }
 
 .decision-rail {
@@ -594,7 +567,7 @@ body { overflow-y: auto; }
 
 .dossier-hero span, .section-title small, .story-card header small { font-size: 11px; }
 .dossier-hero h2 { font-size: 36px; }
-.proof-pill { padding: 10px 14px; font-size: 15px; }
+.text-only-pill { padding: 10px 14px; font-size: 15px; }
 .initial-review-card h3, .decision-heading h3 { font-size: 24px; }
 .initial-review-card header span, .decision-heading > span { font-size: 11px; }
 .initial-review-card header > strong { padding: 10px 18px; font-size: 20px; }
@@ -605,10 +578,6 @@ body { overflow-y: auto; }
 .story-card > p, .story-grid .story-card > p { font-size: 21px; line-height: 1.85; }
 .tag-list span, .tag-list em { padding: 10px 13px; font-size: 17px; }
 .supplement { padding: 15px; font-size: 18px; }
-.proof-card > header span { font-size: 17px; }
-.proof-card > header em { font-size: 14px; }
-.proof-card > p, .proof-images button > span { font-size: 15px; }
-.proof-images small { font-size: 12px; }
 .commitment-columns h4 { font-size: 16px; }
 .commitment-columns li { font-size: 16px; line-height: 1.65; }
 
@@ -651,9 +620,8 @@ body { overflow-y: auto; }
   .privacy-note { display: block; }
   .dossier-hero { gap: 10px; }
   .dossier-hero h2 { font-size: 25px; }
-  .story-card, .issue-section, .proof-section, .commitment-section { padding: 18px; }
+  .story-card, .issue-section, .commitment-section { padding: 18px; }
   .story-card > p { font-size: 15px; }
-  .proof-images { grid-template-columns: 1fr; }
   .decision-actions { grid-template-columns: 1fr; }
   .decision-actions button { min-height: 60px; }
   .shortcut-tip span { width: 100%; text-align: center; }

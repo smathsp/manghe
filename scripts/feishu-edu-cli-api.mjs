@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises'
+import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { extname, join } from 'node:path'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -24,11 +24,12 @@ const SEARCH_FIELDS = [
 ]
 
 const REVIEW_RESULTS = new Set(['通过', '待补材料', '不通过'])
-const ATTACHMENT_FIELDS = new Set([
+const PRIVATE_ATTACHMENT_FIELDS = [
   '【高中生】需要你的学生证',
   '真实校园证明',
   '【高中生】高考准考证',
-])
+  '【大学生】教育部学籍在线验证报告',
+]
 
 let recordIndexCache = null
 
@@ -205,7 +206,7 @@ async function getRecord(recordId) {
   if (normalizeValue(record.fields?.['你的微信手机号'])) record.fields['你的微信手机号'] = '***'
   if (record.fields) {
     delete record.fields['提交人']
-    delete record.fields['【大学生】教育部学籍在线验证报告']
+    for (const fieldName of PRIVATE_ATTACHMENT_FIELDS) delete record.fields[fieldName]
   }
   return record
 }
@@ -255,56 +256,6 @@ async function saveReview(recordId, result, rawNote) {
   return { record_id: recordId, result, note, review_time: localDateTime() }
 }
 
-function safeImageExtension(filename) {
-  const extension = extname(String(filename || '')).toLowerCase()
-  return ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(extension) ? extension : '.bin'
-}
-
-function contentTypeFor(extension) {
-  return {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.webp': 'image/webp',
-    '.gif': 'image/gif',
-  }[extension] || 'application/octet-stream'
-}
-
-async function downloadAttachment(body) {
-  const recordId = String(body.recordId || '')
-  const fieldName = String(body.fieldName || '')
-  const fileToken = String(body.fileToken || '')
-  if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
-  if (!ATTACHMENT_FIELDS.has(fieldName)) throw new Error('不允许读取这个附件字段')
-  if (!/^[a-z0-9_-]{8,256}$/i.test(fileToken)) throw new Error('附件标识不正确')
-
-  const record = await getRecord(recordId)
-  const attachments = Array.isArray(record.fields?.[fieldName]) ? record.fields[fieldName] : []
-  const attachment = attachments.find((item) => item?.file_token === fileToken)
-  if (!attachment) throw new Error('附件不属于这条申请记录')
-
-  const extension = safeImageExtension(attachment.name)
-  const relativeDirectory = join('.openai', '.edu-attachment-cache')
-  const directory = join(process.cwd(), relativeDirectory)
-  const relativeOutput = join(relativeDirectory, `${fileToken}${extension}`)
-  const output = join(process.cwd(), relativeOutput)
-  await mkdir(directory, { recursive: true })
-  await runLark([
-    'base', '+record-download-attachment',
-    '--base-token', BASE_TOKEN,
-    '--table-id', TABLE_ID,
-    '--record-id', recordId,
-    '--file-token', fileToken,
-    '--output', `./${relativeOutput.replaceAll('\\', '/')}`,
-    '--overwrite',
-    '--as', 'user',
-  ])
-
-  const bytes = await readFile(output)
-  await unlink(output).catch(() => {})
-  return { bytes, contentType: contentTypeFor(extension) }
-}
-
 async function handleApi(req, res) {
   try {
     if (req.method !== 'POST') {
@@ -332,14 +283,6 @@ async function handleApi(req, res) {
         String(body.result || ''),
         body.note,
       ))
-      return
-    }
-    if (pathname === '/api/edu/attachment') {
-      const attachment = await downloadAttachment(body)
-      res.statusCode = 200
-      res.setHeader('Content-Type', attachment.contentType)
-      res.setHeader('Cache-Control', 'private, max-age=300')
-      res.end(attachment.bytes)
       return
     }
     sendJson(res, 404, { message: '接口不存在' })

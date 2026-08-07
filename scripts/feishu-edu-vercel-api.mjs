@@ -4,7 +4,6 @@ const DEFAULT_TABLE_ID = 'tblUhSp8cIYw5wHW'
 const MAX_BODY_BYTES = 24 * 1024
 const CACHE_TTL_MS = 20 * 1000
 const FEISHU_REQUEST_TIMEOUT_MS = 10 * 1000
-const FEISHU_ATTACHMENT_TIMEOUT_MS = 18 * 1000
 
 const SEARCH_FIELDS = [
   '编号',
@@ -18,11 +17,12 @@ const SEARCH_FIELDS = [
   'EDU审核备注',
 ]
 
-const ATTACHMENT_FIELDS = new Set([
+const PRIVATE_ATTACHMENT_FIELDS = [
   '【高中生】需要你的学生证',
   '真实校园证明',
   '【高中生】高考准考证',
-])
+  '【大学生】教育部学籍在线验证报告',
+]
 const REVIEW_RESULTS = new Set(['通过', '待补材料', '不通过'])
 
 let tenantTokenCache = null
@@ -120,7 +120,7 @@ function sanitizeRecord(record) {
   const fields = { ...(record.fields || {}) }
   if (normalizeValue(fields['你的微信手机号'])) fields['你的微信手机号'] = '***'
   delete fields['提交人']
-  delete fields['【大学生】教育部学籍在线验证报告']
+  for (const fieldName of PRIVATE_ATTACHMENT_FIELDS) delete fields[fieldName]
   return { ...record, fields }
 }
 
@@ -205,27 +205,6 @@ async function feishuJson(path, options = {}) {
     if (!response.ok || payload.code) throw friendlyFeishuError(payload, response.status || 400)
     return payload
   })
-}
-
-async function feishuDownload(path, { token } = {}) {
-  return feishuRequest(
-    path,
-    { token, timeoutMs: FEISHU_ATTACHMENT_TIMEOUT_MS },
-    async (response) => {
-      if (!response.ok) {
-        return {
-          ok: false,
-          status: response.status,
-          payload: await response.json().catch(() => ({})),
-        }
-      }
-      return {
-        ok: true,
-        contentType: response.headers.get('content-type') || 'application/octet-stream',
-        bytes: Buffer.from(await response.arrayBuffer()),
-      }
-    },
-  )
 }
 
 async function getTenantToken(appId, appSecret) {
@@ -342,53 +321,6 @@ async function saveReview(token, baseToken, tableId, recordId, result, rawNote) 
   return { record_id: recordId, result, note, review_time: reviewTime }
 }
 
-function findAttachmentExtra(value, fileToken) {
-  if (!value || typeof value !== 'object') return ''
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findAttachmentExtra(item, fileToken)
-      if (found) return found
-    }
-    return ''
-  }
-  const token = value.file_token || value.fileToken || value.token
-  if (token === fileToken) return value.extra || value.extra_info || value.extraInfo || ''
-  for (const child of Object.values(value)) {
-    const found = findAttachmentExtra(child, fileToken)
-    if (found) return found
-  }
-  return ''
-}
-
-async function downloadAttachment(token, baseToken, tableId, recordId, fieldName, fileToken) {
-  if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
-  if (!ATTACHMENT_FIELDS.has(fieldName)) throw new Error('不允许读取这个附件字段')
-  if (!/^[a-z0-9_-]{8,256}$/i.test(fileToken)) throw new Error('附件标识不正确')
-
-  const record = await getRecord(token, baseToken, tableId, recordId)
-  const attachments = Array.isArray(record?.fields?.[fieldName]) ? record.fields[fieldName] : []
-  if (!attachments.some((item) => item?.file_token === fileToken)) throw new Error('附件不属于这条申请记录')
-
-  let download = await feishuDownload(
-    `/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download`,
-    { token },
-  )
-  if (!download.ok) {
-    const metadata = await feishuJson(
-      `/open-apis/base/v3/bases/${baseToken}/tables/${tableId}/get_attachments`,
-      { token, method: 'POST', body: { record_id_list: [recordId] } },
-    )
-    const extra = findAttachmentExtra(metadata, fileToken)
-    const suffix = extra ? `?${new URLSearchParams({ extra })}` : ''
-    download = await feishuDownload(
-      `/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download${suffix}`,
-      { token },
-    )
-  }
-  if (!download.ok) throw friendlyFeishuError(download.payload, download.status)
-  return download
-}
-
 export async function handleEduApi(request, response) {
   try {
     if (request.method !== 'POST') {
@@ -427,21 +359,6 @@ export async function handleEduApi(request, response) {
         String(body.result || ''),
         body.note,
       ))
-      return
-    }
-    if (pathname === '/api/edu/attachment') {
-      const attachment = await downloadAttachment(
-        token,
-        config.baseToken,
-        config.tableId,
-        String(body.recordId || ''),
-        String(body.fieldName || ''),
-        String(body.fileToken || ''),
-      )
-      response.statusCode = 200
-      response.setHeader('Content-Type', attachment.contentType)
-      response.setHeader('Cache-Control', 'private, max-age=300')
-      response.end(attachment.bytes)
       return
     }
     sendJson(response, 404, { message: '接口不存在' })

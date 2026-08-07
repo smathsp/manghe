@@ -1,6 +1,5 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { createEduLiveSync } from './eduLiveSync'
 import './edu-screening.css'
 
 const phoneQuery = ref('')
@@ -19,24 +18,8 @@ const message = ref('')
 const reviewMessage = ref('')
 const reviewNote = ref('')
 const stats = ref({ total: 0, reviewed: 0, pending: 0 })
-const imageUrls = ref(new Map())
-const imageState = ref(new Map())
-const blurredPreviews = ref(new Map())
-const lightbox = ref(null)
-const liveViewerConnected = ref(false)
 const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 const PASSWORD_STORAGE_KEY = 'manghe-edu-screening-access-key'
-let liveSync = null
-let liveHeartbeatTimer = null
-let liveViewerTimeout = null
-let liveScrollFrame = null
-let lastLiveScrollSentAt = 0
-
-const PROOF_FIELDS = [
-  { key: '真实校园证明', label: '真实校园证明', for: 'all' },
-  { key: '【高中生】需要你的学生证', label: '学生证', for: '高中生' },
-  { key: '【高中生】高考准考证', label: '高考准考证', for: '高中生' },
-]
 
 function normalize(value) {
   if (value == null) return ''
@@ -71,16 +54,10 @@ function dateText(value) {
   return normalize(value)
 }
 
-function attachmentItems(name) {
-  const value = field(name)
-  return Array.isArray(value) ? value.filter((item) => item?.file_token) : []
-}
-
 const applicantNumber = computed(() => fieldText('编号', currentSummary.value?.number || '—'))
 const school = computed(() => fieldText('你的学校名称是？', currentSummary.value?.school || '未填写学校'))
 const douyinNickname = computed(() => fieldText('你的抖音昵称', currentSummary.value?.douyin || '未填写抖音昵称'))
 const category = computed(() => fieldText('你是属于以下哪一种分类？', currentSummary.value?.category || '未分类'))
-const isHighSchool = computed(() => /高中|准大学/.test(category.value))
 const submitTime = computed(() => dateText(field('提交时间') || currentSummary.value?.submitted_at))
 const existingResult = computed(() => fieldText('EDU审核结果', ''))
 const initialReviewResult = computed(() => fieldText('人工初审结果', '未初审'))
@@ -91,113 +68,17 @@ const initialReviewClass = computed(() => {
   return 'pending'
 })
 
-const proofCards = computed(() => PROOF_FIELDS
-  .filter((item) => item.for === 'all' || (item.for === '高中生' && isHighSchool.value))
-  .map((item) => ({ ...item, items: attachmentItems(item.key) })))
-
 const confirmationItems = computed(() => valueList(field('信息确认')))
 const networkProblems = computed(() => valueList(field('你目前遇到的主要网络问题是什么？')))
 const feedbackItems = computed(() => valueList(field('是否愿意参与后续产品体验反馈？')))
-
-const proofStatus = computed(() => {
-  if (isHighSchool.value) {
-    return attachmentItems('【高中生】需要你的学生证').length
-      || attachmentItems('【高中生】高考准考证').length
-      ? '已提供高中生证明'
-      : '缺少高中生证明'
-  }
-  return attachmentItems('真实校园证明').length
-    ? '已提交身份材料'
-    : '未提交身份材料'
-})
 
 const progressPercent = computed(() => stats.value.total
   ? Math.round((stats.value.reviewed / stats.value.total) * 100)
   : 0)
 
-function buildLivePayload() {
-  if (!current.value) return null
-  return {
-    number: applicantNumber.value,
-    nickname: douyinNickname.value,
-    school: school.value,
-    category: category.value,
-    livingExpense: fieldText('你的每月生活费档位'),
-    reviewResult: existingResult.value || '待审核',
-    initialReviewResult: initialReviewResult.value,
-    initialReviewNote: initialReviewNote.value,
-    reason: fieldText('请简单说明你申请EDU版本的主要原因'),
-    networkProblems: [...networkProblems.value],
-    networkSupplement: fieldText('你目前遇到的主要网络问题是什么？-其他-补充内容', ''),
-    proofStatus: proofStatus.value,
-    discovery: fieldText('你是通过什么渠道了解到鲲鹏的？哪一点让你考虑选择鲲鹏？请结合自己的使用需求简单说明。'),
-    viewOnZhang: fieldText('作为学生，你是怎么看张导的，有什么不足之处，可以怎么改善'),
-    feedbackItems: [...feedbackItems.value],
-    confirmationItems: [...confirmationItems.value],
-    blurredImages: proofCards.value.flatMap((card) => card.items
-      .map((attachment) => blurredPreviews.value.get(attachment.file_token))
-      .filter(Boolean)
-      .map((src) => ({ label: card.label, src }))),
-  }
-}
-
-function publishLiveRecord() {
-  const payload = buildLivePayload()
-  liveSync?.send(payload ? 'record' : 'clear', payload)
-}
-
-function markLiveViewerConnected() {
-  liveViewerConnected.value = true
-  window.clearTimeout(liveViewerTimeout)
-  liveViewerTimeout = window.setTimeout(() => {
-    liveViewerConnected.value = false
-  }, 10_000)
-}
-
-function publishLiveScroll(force = false) {
-  if (!current.value || !liveSync) return
-  const now = Date.now()
-  if (!force && now - lastLiveScrollSentAt < 80) return
-  lastLiveScrollSentAt = now
-  const sections = [...document.querySelectorAll('[data-live-section]')]
-  if (!sections.length) return
-  const marker = window.scrollY + (window.innerHeight * .3)
-  let active = sections[0]
-  for (const section of sections) {
-    const top = section.getBoundingClientRect().top + window.scrollY
-    if (top <= marker) active = section
-  }
-  const top = active.getBoundingClientRect().top + window.scrollY
-  const progress = Math.max(0, Math.min(1, (marker - top) / Math.max(1, active.offsetHeight)))
-  liveSync.send('scroll-state', { section: active.dataset.liveSection, progress })
-}
-
-function onLiveScroll() {
-  if (liveScrollFrame) return
-  liveScrollFrame = window.requestAnimationFrame(() => {
-    liveScrollFrame = null
-    publishLiveScroll()
-  })
-}
-
-function handleLiveMessage(message) {
-  if (message.type === 'viewer-ready') {
-    markLiveViewerConnected()
-    liveSync?.send('controller-heartbeat', { hasRecord: Boolean(current.value) })
-    publishLiveRecord()
-    publishLiveScroll(true)
-  }
-  if (message.type === 'review-command') {
-    markLiveViewerConnected()
-    reviewNote.value = String(message.payload?.note || '').slice(0, 500)
-    saveReview(message.payload?.result)
-  }
-}
-
-async function api(path, body = {}, blob = false) {
+async function api(path, body = {}) {
   const controller = new AbortController()
-  const timeoutMs = blob ? 20_000 : 12_000
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  const timer = window.setTimeout(() => controller.abort(), 12_000)
   try {
     const response = await fetch(path, {
       method: 'POST',
@@ -205,19 +86,12 @@ async function api(path, body = {}, blob = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessKey: accessKey.value, ...body }),
     })
-    if (blob) {
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.message || '读取证明材料失败')
-      }
-      return await response.blob()
-    }
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data.message || '连接飞书审核服务失败')
     return data
   } catch (error) {
     if (error?.name === 'AbortError') {
-      throw new Error(blob ? '证明材料读取超时，点击重试' : '连接飞书超时，请重试')
+      throw new Error('连接飞书超时，请重试')
     }
     throw error
   } finally {
@@ -282,52 +156,10 @@ async function openNext() {
   }
 }
 
-function revokeImages() {
-  for (const url of imageUrls.value.values()) URL.revokeObjectURL(url)
-  imageUrls.value = new Map()
-  imageState.value = new Map()
-  blurredPreviews.value = new Map()
-}
-
-async function createStreamSafePreview(blob) {
-  const bitmap = await createImageBitmap(blob)
-  try {
-    const tinyLongEdge = 20
-    const ratio = Math.min(1, tinyLongEdge / Math.max(bitmap.width, bitmap.height))
-    const tinyWidth = Math.max(4, Math.round(bitmap.width * ratio))
-    const tinyHeight = Math.max(4, Math.round(bitmap.height * ratio))
-    const tinyCanvas = document.createElement('canvas')
-    tinyCanvas.width = tinyWidth
-    tinyCanvas.height = tinyHeight
-    const tinyContext = tinyCanvas.getContext('2d')
-    tinyContext.imageSmoothingEnabled = true
-    tinyContext.imageSmoothingQuality = 'high'
-    tinyContext.drawImage(bitmap, 0, 0, tinyWidth, tinyHeight)
-
-    const outputLongEdge = 360
-    const outputRatio = outputLongEdge / Math.max(tinyWidth, tinyHeight)
-    const outputWidth = Math.max(120, Math.round(tinyWidth * outputRatio))
-    const outputHeight = Math.max(120, Math.round(tinyHeight * outputRatio))
-    const outputCanvas = document.createElement('canvas')
-    outputCanvas.width = outputWidth
-    outputCanvas.height = outputHeight
-    const outputContext = outputCanvas.getContext('2d')
-    outputContext.imageSmoothingEnabled = true
-    outputContext.imageSmoothingQuality = 'high'
-    outputContext.filter = 'blur(18px)'
-    outputContext.drawImage(tinyCanvas, -24, -24, outputWidth + 48, outputHeight + 48)
-    return outputCanvas.toDataURL('image/webp', .55)
-  } finally {
-    bitmap.close()
-  }
-}
-
 async function openRecord(summary) {
   lastRequest.value = { kind: 'record', summary }
   searchState.value = 'loading'
   message.value = '正在展开完整申请材料…'
-  revokeImages()
-  liveSync?.send('clear')
   try {
     const data = await api('/api/edu/record', { recordId: summary.record_id })
     current.value = data.record
@@ -340,9 +172,6 @@ async function openRecord(summary) {
     message.value = ''
     await nextTick()
     window.scrollTo({ top: 0 })
-    publishLiveRecord()
-    publishLiveScroll(true)
-    loadProofImages()
   } catch (error) {
     searchState.value = 'error'
     message.value = error.message
@@ -357,62 +186,16 @@ function retryLastRequest() {
   if (request.kind === 'record') openRecord(request.summary)
 }
 
-async function loadProofImage(fieldName, attachment) {
-  const key = attachment.file_token
-  imageState.value.set(key, 'loading')
-  imageState.value = new Map(imageState.value)
-  try {
-    const blob = await api('/api/edu/attachment', {
-      recordId: current.value.record_id,
-      fieldName,
-      fileToken: attachment.file_token,
-      filename: attachment.name,
-    }, true)
-    imageUrls.value.set(key, URL.createObjectURL(blob))
-    imageUrls.value = new Map(imageUrls.value)
-    imageState.value.set(key, 'ready')
-    try {
-      blurredPreviews.value.set(key, await createStreamSafePreview(blob))
-      blurredPreviews.value = new Map(blurredPreviews.value)
-      publishLiveRecord()
-    } catch {
-      // The private reviewer can still use the original if preview generation fails.
-    }
-  } catch {
-    imageState.value.set(key, 'error')
-  }
-  imageState.value = new Map(imageState.value)
-}
-
-async function loadProofImages() {
-  const tasks = []
-  for (const card of proofCards.value) {
-    for (const attachment of card.items) tasks.push(loadProofImage(card.key, attachment))
-  }
-  const workers = Array.from({ length: Math.min(3, tasks.length) }, async (_, workerIndex) => {
-    for (let index = workerIndex; index < tasks.length; index += 3) await tasks[index]
-  })
-  await Promise.all(workers)
-}
-
-function openImage(fieldName, attachment) {
-  const src = imageUrls.value.get(attachment.file_token)
-  if (!src) return
-  lightbox.value = { src, label: `${fieldName} · ${attachment.name}` }
-}
-
 async function saveReview(result) {
   if (!current.value || reviewState.value === 'saving') return
   if (result !== '通过' && !reviewNote.value.trim()) {
     reviewMessage.value = result === '待补材料'
       ? '请在备注里写明需要补充什么材料'
       : '请简单写明不通过原因'
-    liveSync?.send('review-status', { state: 'error', message: reviewMessage.value })
     return
   }
   reviewState.value = 'saving'
   reviewMessage.value = `正在保存“${result}”…`
-  liveSync?.send('review-status', { state: 'saving', message: reviewMessage.value })
   try {
     const wasReviewed = Boolean(existingResult.value)
     await api('/api/edu/review', {
@@ -422,17 +205,14 @@ async function saveReview(result) {
     })
     current.value.fields['EDU审核结果'] = [result]
     current.value.fields['EDU审核备注'] = reviewNote.value
-    publishLiveRecord()
     reviewState.value = 'saved'
     reviewMessage.value = `已同步到飞书：${result}`
-    liveSync?.send('review-status', { state: 'saved', message: reviewMessage.value })
     stats.value.reviewed = Math.min(stats.value.total, stats.value.reviewed + (wasReviewed ? 0 : 1))
     stats.value.pending = Math.max(0, stats.value.total - stats.value.reviewed)
     window.setTimeout(() => openNext(), 620)
   } catch (error) {
     reviewState.value = 'error'
     reviewMessage.value = error.message
-    liveSync?.send('review-status', { state: 'error', message: reviewMessage.value })
   }
 }
 
@@ -441,8 +221,6 @@ function resetSearch() {
   currentSummary.value = null
   message.value = ''
   reviewMessage.value = ''
-  revokeImages()
-  liveSync?.send('clear')
 }
 
 function onKeydown(event) {
@@ -466,22 +244,10 @@ onMounted(() => {
     accessKey.value = savedPassword
     rememberPassword.value = true
   }
-  liveSync = createEduLiveSync(handleLiveMessage)
-  liveHeartbeatTimer = window.setInterval(() => {
-    liveSync?.send('controller-heartbeat', { hasRecord: Boolean(current.value) })
-  }, 4_000)
-  window.addEventListener('scroll', onLiveScroll, { passive: true })
   window.addEventListener('keydown', onKeydown)
 })
 onBeforeUnmount(() => {
-  liveSync?.send('controller-offline')
-  liveSync?.close()
-  window.clearInterval(liveHeartbeatTimer)
-  window.clearTimeout(liveViewerTimeout)
-  window.cancelAnimationFrame(liveScrollFrame)
-  window.removeEventListener('scroll', onLiveScroll)
   window.removeEventListener('keydown', onKeydown)
-  revokeImages()
 })
 </script>
 
@@ -500,10 +266,6 @@ onBeforeUnmount(() => {
         <em>{{ stats.pending }} 待处理</em>
       </div>
       <div class="topbar-actions">
-        <a class="topbar-action live-page-link" href="/edu-screening/live/" target="_blank" rel="noopener">
-          <i :class="{ connected: liveViewerConnected }"></i>
-          {{ liveViewerConnected ? '直播页已连接' : '打开直播页' }}
-        </a>
         <button v-if="current" class="topbar-action" type="button" @click="resetSearch">返回搜索</button>
       </div>
     </header>
@@ -615,7 +377,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else class="review-workspace">
-      <aside class="candidate-rail" data-live-section="candidate">
+      <aside class="candidate-rail">
         <div class="candidate-index"><span>APPLICATION</span><strong>#{{ applicantNumber }}</strong></div>
         <div class="candidate-school">
           <span class="student-seal">{{ douyinNickname.slice(0, 1) }}</span>
@@ -627,16 +389,16 @@ onBeforeUnmount(() => {
           <div><span>生活费档位</span><strong>{{ fieldText('你的每月生活费档位') }}</strong></div>
           <div><span>当前状态</span><strong :class="{ done: existingResult }">{{ existingResult || '等待审核' }}</strong></div>
         </div>
-        <div class="privacy-note"><b>隐私模式</b><p>联系方式与证件原图不进入公开页面，审核材料仅在本机临时读取。</p></div>
+        <div class="privacy-note"><b>纯文字审核</b><p>手机号始终脱敏；本页面不会请求、读取或展示任何证明照片。</p></div>
       </aside>
 
       <div class="dossier">
         <section class="dossier-hero">
           <div><span>STUDENT DOSSIER</span><h2>学生申请档案</h2></div>
-          <div class="proof-pill" :class="{ warning: /缺少|未提交/.test(proofStatus) }"><i></i>{{ proofStatus }}</div>
+          <div class="text-only-pill"><i></i>仅展示文字信息</div>
         </section>
 
-        <section class="initial-review-card" :class="initialReviewClass" data-live-section="initial">
+        <section class="initial-review-card" :class="initialReviewClass">
           <header>
             <div><span>MANUAL PRE-REVIEW</span><h3>人工初审</h3></div>
             <strong>{{ initialReviewResult }}</strong>
@@ -647,53 +409,30 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="story-card primary-story" data-live-section="reason">
+        <section class="story-card primary-story">
           <header><span>01</span><div><small>WHY EDU</small><h3>为什么申请 EDU 学生版？</h3></div></header>
           <p>{{ fieldText('请简单说明你申请EDU版本的主要原因') }}</p>
         </section>
 
-        <section class="issue-section" data-live-section="network">
+        <section class="issue-section">
           <header class="section-title"><span>02</span><div><small>REAL NEEDS</small><h3>真实网络需求</h3></div></header>
           <div class="tag-list"><span v-for="item in networkProblems" :key="item">{{ item }}</span><em v-if="!networkProblems.length">未填写</em></div>
           <p v-if="fieldText('你目前遇到的主要网络问题是什么？-其他-补充内容', '')" class="supplement">{{ fieldText('你目前遇到的主要网络问题是什么？-其他-补充内容') }}</p>
         </section>
 
-        <section class="proof-section" data-live-section="proof">
-          <header class="section-title"><span>03</span><div><small>PROOF OF STUDENT</small><h3>学生身份证明</h3></div></header>
-          <div class="proof-grid">
-            <article v-for="card in proofCards" :key="card.key" class="proof-card" :class="{ empty: !card.items.length }">
-              <header><span>{{ card.label }}</span><em>{{ card.items.length }} 份</em></header>
-              <div v-if="card.items.length" class="proof-images">
-                <button
-                  v-for="attachment in card.items"
-                  :key="attachment.file_token"
-                  type="button"
-                  @click="imageState.get(attachment.file_token) === 'error' ? loadProofImage(card.key, attachment) : openImage(card.label, attachment)"
-                >
-                  <img v-if="imageUrls.get(attachment.file_token)" :src="imageUrls.get(attachment.file_token)" :alt="`${card.label} ${attachment.name}`">
-                  <span v-else-if="imageState.get(attachment.file_token) === 'error'">读取失败，点击重试</span>
-                  <span v-else class="image-loading">读取中</span>
-                  <small>{{ attachment.name }}</small>
-                </button>
-              </div>
-              <p v-else>未提交此项材料</p>
-            </article>
-          </div>
-        </section>
-
         <section class="story-grid">
-          <article class="story-card" data-live-section="discovery">
-            <header><span>04</span><div><small>DISCOVERY</small><h3>如何了解到鲲鹏？</h3></div></header>
+          <article class="story-card">
+            <header><span>03</span><div><small>DISCOVERY</small><h3>如何了解到鲲鹏？</h3></div></header>
             <p>{{ fieldText('你是通过什么渠道了解到鲲鹏的？哪一点让你考虑选择鲲鹏？请结合自己的使用需求简单说明。') }}</p>
           </article>
-          <article class="story-card" data-live-section="feedback">
-            <header><span>05</span><div><small>HONEST FEEDBACK</small><h3>怎么看张导？</h3></div></header>
+          <article class="story-card">
+            <header><span>04</span><div><small>HONEST FEEDBACK</small><h3>怎么看张导？</h3></div></header>
             <p>{{ fieldText('作为学生，你是怎么看张导的，有什么不足之处，可以怎么改善') }}</p>
           </article>
         </section>
 
-        <section class="commitment-section" data-live-section="commitment">
-          <header class="section-title"><span>06</span><div><small>COMMITMENT</small><h3>体验反馈与信息确认</h3></div></header>
+        <section class="commitment-section">
+          <header class="section-title"><span>05</span><div><small>COMMITMENT</small><h3>体验反馈与信息确认</h3></div></header>
           <div class="commitment-columns">
             <div><h4>愿意参与</h4><ul><li v-for="item in feedbackItems" :key="item">{{ item }}</li><li v-if="!feedbackItems.length" class="muted">未填写</li></ul></div>
             <div><h4>已确认 {{ confirmationItems.length }} / 6</h4><ul><li v-for="item in confirmationItems" :key="item">{{ item }}</li><li v-if="!confirmationItems.length" class="muted">未确认</li></ul></div>
@@ -701,7 +440,7 @@ onBeforeUnmount(() => {
         </section>
       </div>
 
-      <aside class="decision-rail" data-live-section="decision">
+      <aside class="decision-rail">
         <div class="decision-heading">
           <span>FINAL REVIEW</span>
           <h3>审核判断</h3>
@@ -724,10 +463,5 @@ onBeforeUnmount(() => {
         <div class="shortcut-tip"><span>键盘快捷键</span><b>1 通过</b><b>2 待补</b><b>3 不通过</b></div>
       </aside>
     </section>
-
-    <div v-if="lightbox" class="edu-lightbox" role="button" tabindex="0" aria-label="关闭证明原图" @click="lightbox = null" @keydown.enter="lightbox = null">
-      <img :src="lightbox.src" :alt="lightbox.label">
-      <p>{{ lightbox.label }}<span>点击任意处关闭</span></p>
-    </div>
   </main>
 </template>
