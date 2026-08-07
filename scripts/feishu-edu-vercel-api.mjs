@@ -3,6 +3,8 @@ const DEFAULT_BASE_TOKEN = 'BO8PbV4F3aAN0msbHVQcW8Vangd'
 const DEFAULT_TABLE_ID = 'tblUhSp8cIYw5wHW'
 const MAX_BODY_BYTES = 24 * 1024
 const CACHE_TTL_MS = 20 * 1000
+const FEISHU_REQUEST_TIMEOUT_MS = 10 * 1000
+const FEISHU_ATTACHMENT_TIMEOUT_MS = 18 * 1000
 
 const SEARCH_FIELDS = [
   '编号',
@@ -165,30 +167,64 @@ function friendlyFeishuError(payload, fallbackStatus = 502) {
   return error
 }
 
-async function feishuFetch(path, { token, method = 'GET', body } = {}) {
-  let response
+function timeoutError(message = '飞书响应超时，请重试') {
+  const error = new Error(message)
+  error.status = 504
+  return error
+}
+
+async function feishuRequest(path, { token, method = 'GET', body, timeoutMs = FEISHU_REQUEST_TIMEOUT_MS } = {}, consume) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    response = await fetch(`${FEISHU_ORIGIN}${path}`, {
+    const response = await fetch(`${FEISHU_ORIGIN}${path}`, {
       method,
+      signal: controller.signal,
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(body ? { 'Content-Type': 'application/json; charset=utf-8' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     })
-  } catch {
-    const error = new Error('无法连接飞书开放平台')
-    error.status = 502
-    throw error
+    return await consume(response)
+  } catch (error) {
+    if (error?.name === 'AbortError') throw timeoutError()
+    if (error?.status) throw error
+    const connectionError = new Error('无法连接飞书开放平台')
+    connectionError.status = 502
+    throw connectionError
+  } finally {
+    clearTimeout(timer)
   }
-  return response
 }
 
 async function feishuJson(path, options = {}) {
-  const response = await feishuFetch(path, options)
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok || payload.code) throw friendlyFeishuError(payload, response.status || 400)
-  return payload
+  return feishuRequest(path, options, async (response) => {
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok || payload.code) throw friendlyFeishuError(payload, response.status || 400)
+    return payload
+  })
+}
+
+async function feishuDownload(path, { token } = {}) {
+  return feishuRequest(
+    path,
+    { token, timeoutMs: FEISHU_ATTACHMENT_TIMEOUT_MS },
+    async (response) => {
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status,
+          payload: await response.json().catch(() => ({})),
+        }
+      }
+      return {
+        ok: true,
+        contentType: response.headers.get('content-type') || 'application/octet-stream',
+        bytes: Buffer.from(await response.arrayBuffer()),
+      }
+    },
+  )
 }
 
 async function getTenantToken(appId, appSecret) {
@@ -332,24 +368,24 @@ async function downloadAttachment(token, baseToken, tableId, recordId, fieldName
   const attachments = Array.isArray(record?.fields?.[fieldName]) ? record.fields[fieldName] : []
   if (!attachments.some((item) => item?.file_token === fileToken)) throw new Error('附件不属于这条申请记录')
 
-  let response = await feishuFetch(
+  let download = await feishuDownload(
     `/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download`,
     { token },
   )
-  if (!response.ok) {
+  if (!download.ok) {
     const metadata = await feishuJson(
       `/open-apis/base/v3/bases/${baseToken}/tables/${tableId}/get_attachments`,
       { token, method: 'POST', body: { record_id_list: [recordId] } },
     )
     const extra = findAttachmentExtra(metadata, fileToken)
     const suffix = extra ? `?${new URLSearchParams({ extra })}` : ''
-    response = await feishuFetch(
+    download = await feishuDownload(
       `/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download${suffix}`,
       { token },
     )
   }
-  if (!response.ok) throw friendlyFeishuError(await response.json().catch(() => ({})), response.status)
-  return response
+  if (!download.ok) throw friendlyFeishuError(download.payload, download.status)
+  return download
 }
 
 export async function handleEduApi(request, response) {
@@ -402,10 +438,9 @@ export async function handleEduApi(request, response) {
         String(body.fileToken || ''),
       )
       response.statusCode = 200
-      response.setHeader('Content-Type', attachment.headers.get('content-type') || 'application/octet-stream')
+      response.setHeader('Content-Type', attachment.contentType)
       response.setHeader('Cache-Control', 'private, max-age=300')
-      const bytes = Buffer.from(await attachment.arrayBuffer())
-      response.end(bytes)
+      response.end(attachment.bytes)
       return
     }
     sendJson(response, 404, { message: '接口不存在' })

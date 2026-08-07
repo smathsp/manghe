@@ -8,6 +8,7 @@ const accessKey = ref('')
 const rememberPassword = ref(false)
 const passwordSettingsOpen = ref(false)
 const lastSearchType = ref('')
+const lastRequest = ref(null)
 const results = ref([])
 const current = ref(null)
 const currentSummary = ref(null)
@@ -115,21 +116,34 @@ const progressPercent = computed(() => stats.value.total
   : 0)
 
 async function api(path, body = {}, blob = false) {
-  const response = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accessKey: accessKey.value, ...body }),
-  })
-  if (blob) {
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      throw new Error(data.message || '读取证明材料失败')
+  const controller = new AbortController()
+  const timeoutMs = blob ? 20_000 : 12_000
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(path, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessKey: accessKey.value, ...body }),
+    })
+    if (blob) {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || '读取证明材料失败')
+      }
+      return await response.blob()
     }
-    return response.blob()
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.message || '连接飞书审核服务失败')
+    return data
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(blob ? '证明材料读取超时，点击重试' : '连接飞书超时，请重试')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timer)
   }
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message || '连接飞书审核服务失败')
-  return data
 }
 
 function updateStats(value) {
@@ -153,6 +167,7 @@ async function search(type) {
     return
   }
   lastSearchType.value = type
+  lastRequest.value = { kind: 'search', type }
   searchState.value = 'loading'
   message.value = '正在从飞书读取申请人…'
   try {
@@ -170,6 +185,7 @@ async function search(type) {
 async function openNext() {
   if (!ensurePassword()) return
   if (searchState.value === 'loading') return
+  lastRequest.value = { kind: 'next' }
   searchState.value = 'loading'
   message.value = '正在寻找下一位未审核申请人…'
   try {
@@ -194,6 +210,7 @@ function revokeImages() {
 }
 
 async function openRecord(summary) {
+  lastRequest.value = { kind: 'record', summary }
   searchState.value = 'loading'
   message.value = '正在展开完整申请材料…'
   revokeImages()
@@ -213,6 +230,14 @@ async function openRecord(summary) {
     searchState.value = 'error'
     message.value = error.message
   }
+}
+
+function retryLastRequest() {
+  const request = lastRequest.value
+  if (!request) return
+  if (request.kind === 'search') search(request.type)
+  if (request.kind === 'next') openNext()
+  if (request.kind === 'record') openRecord(request.summary)
 }
 
 async function loadProofImage(fieldName, attachment) {
@@ -422,7 +447,10 @@ onBeforeUnmount(() => {
           <b>→</b>
         </button>
 
-        <p v-if="message" class="edu-message" :class="searchState">{{ message }}</p>
+        <div v-if="message" class="edu-message" :class="searchState">
+          <span>{{ message }}</span>
+          <button v-if="searchState === 'error' && lastRequest" type="button" @click="retryLastRequest">重试</button>
+        </div>
 
         <div v-if="results.length" class="edu-results">
           <button v-for="record in results" :key="record.record_id" type="button" @click="openRecord(record)">
@@ -483,9 +511,14 @@ onBeforeUnmount(() => {
             <article v-for="card in proofCards" :key="card.key" class="proof-card" :class="{ empty: !card.items.length }">
               <header><span>{{ card.label }}</span><em>{{ card.items.length }} 份</em></header>
               <div v-if="card.items.length" class="proof-images">
-                <button v-for="attachment in card.items" :key="attachment.file_token" type="button" @click="openImage(card.label, attachment)">
+                <button
+                  v-for="attachment in card.items"
+                  :key="attachment.file_token"
+                  type="button"
+                  @click="imageState.get(attachment.file_token) === 'error' ? loadProofImage(card.key, attachment) : openImage(card.label, attachment)"
+                >
                   <img v-if="imageUrls.get(attachment.file_token)" :src="imageUrls.get(attachment.file_token)" :alt="`${card.label} ${attachment.name}`">
-                  <span v-else-if="imageState.get(attachment.file_token) === 'error'">读取失败</span>
+                  <span v-else-if="imageState.get(attachment.file_token) === 'error'">读取失败，点击重试</span>
                   <span v-else class="image-loading">读取中</span>
                   <small>{{ attachment.name }}</small>
                 </button>
