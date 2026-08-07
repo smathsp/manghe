@@ -3,7 +3,11 @@ import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { eduRecordResponse } from './feishu-edu-response-fields.mjs'
+import {
+  eduQueueStats,
+  eduRecordResponse,
+  isEduQueuePending,
+} from './feishu-edu-response-fields.mjs'
 
 const execFileAsync = promisify(execFile)
 const BASE_TOKEN = 'BO8PbV4F3aAN0msbHVQcW8Vangd'
@@ -19,6 +23,7 @@ const SEARCH_FIELDS = [
   '你的抖音昵称',
   '你是属于以下哪一种分类？',
   '提交时间',
+  '人工初审结果',
   'EDU审核结果',
 ]
 
@@ -150,15 +155,6 @@ async function listIndexRecords(force = false) {
   return records
 }
 
-function statsFor(records) {
-  const reviewed = records.filter((record) => normalizeValue(record.fields?.['EDU审核结果'])).length
-  return {
-    total: records.length,
-    reviewed,
-    pending: Math.max(0, records.length - reviewed),
-  }
-}
-
 async function searchRecords(type, rawQuery) {
   const query = normalizeSearch(rawQuery)
   if (type === 'phone' && !/^1[3-9]\d{9}$/.test(query)) throw new Error('请输入正确的 11 位手机号')
@@ -170,16 +166,16 @@ async function searchRecords(type, rawQuery) {
     if (type === 'phone') return normalizeSearch(fields['你的微信手机号']) === query
     return normalizeSearch(fields['你的抖音昵称']).includes(query)
   })
-  return { records: matches.slice(0, 30).map(recordSummary), stats: statsFor(records) }
+  return { records: matches.slice(0, 30).map(recordSummary), stats: eduQueueStats(records) }
 }
 
 async function nextUnreviewed(rawAfterNumber = '') {
   const records = await listIndexRecords()
-  const pending = records.filter((record) => !normalizeValue(record.fields?.['EDU审核结果']))
-  if (!pending.length) return { record: null, stats: statsFor(records) }
+  const pending = records.filter(isEduQueuePending)
+  if (!pending.length) return { record: null, stats: eduQueueStats(records) }
   const afterNumber = Number(rawAfterNumber)
   const record = pending.find((item) => recordNumber(item) > afterNumber) || pending[0]
-  return { record: recordSummary(record), stats: statsFor(records) }
+  return { record: recordSummary(record), stats: eduQueueStats(records) }
 }
 
 async function getRecord(recordId) {

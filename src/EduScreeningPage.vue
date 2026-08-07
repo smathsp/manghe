@@ -140,13 +140,13 @@ async function openNext() {
   if (searchState.value === 'loading') return
   lastRequest.value = { kind: 'next' }
   searchState.value = 'loading'
-  message.value = '正在寻找下一位未审核申请人…'
+  message.value = '正在寻找下一位已完成人工初审的申请人…'
   try {
     const data = await api('/api/edu/next', { afterNumber: current.value ? applicantNumber.value : '' })
     updateStats(data.stats)
     if (!data.record) {
       searchState.value = 'ready'
-      message.value = '所有申请人都已完成审核'
+      message.value = '暂无已完成人工初审且等待 EDU 审核的学生'
       return
     }
     await openRecord(data.record)
@@ -352,7 +352,7 @@ onBeforeUnmount(() => {
         </div>
 
         <button class="next-candidate" type="button" :disabled="searchState === 'loading'" @click="openNext">
-          <span><small>NEXT CANDIDATE</small><strong>打开下一位未审核学生</strong></span>
+          <span><small>NEXT CANDIDATE</small><strong>打开下一位已完成人工初审的学生</strong></span>
           <b>→</b>
         </button>
 

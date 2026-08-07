@@ -35,6 +35,28 @@ function hasValue(value) {
   return true
 }
 
+export function isEduInitialReviewed(record) {
+  return hasValue(record?.fields?.['人工初审结果'])
+}
+
+export function isEduFinalReviewed(record) {
+  return hasValue(record?.fields?.['EDU审核结果'])
+}
+
+export function isEduQueuePending(record) {
+  return isEduInitialReviewed(record) && !isEduFinalReviewed(record)
+}
+
+export function eduQueueStats(records) {
+  const eligible = records.filter(isEduInitialReviewed)
+  const reviewed = eligible.filter(isEduFinalReviewed).length
+  return {
+    total: eligible.length,
+    reviewed,
+    pending: Math.max(0, eligible.length - reviewed),
+  }
+}
+
 export function eduRecordResponse(record) {
   if (!record) return record
   const sourceFields = record.fields && typeof record.fields === 'object'

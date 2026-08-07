@@ -1,4 +1,8 @@
-import { eduRecordResponse } from './feishu-edu-response-fields.mjs'
+import {
+  eduQueueStats,
+  eduRecordResponse,
+  isEduQueuePending,
+} from './feishu-edu-response-fields.mjs'
 
 const FEISHU_ORIGIN = 'https://open.feishu.cn'
 const DEFAULT_BASE_TOKEN = 'BO8PbV4F3aAN0msbHVQcW8Vangd'
@@ -14,6 +18,7 @@ const SEARCH_FIELDS = [
   '你的抖音昵称',
   '你是属于以下哪一种分类？',
   '提交时间',
+  '人工初审结果',
   'EDU审核结果',
 ]
 
@@ -125,11 +130,6 @@ function recordSummary(record) {
     submitted_at: normalizeValue(fields['提交时间']),
     review_result: normalizeValue(fields['EDU审核结果']),
   }
-}
-
-function statsFor(records) {
-  const reviewed = records.filter((record) => normalizeValue(record.fields?.['EDU审核结果'])).length
-  return { total: records.length, reviewed, pending: Math.max(0, records.length - reviewed) }
 }
 
 function friendlyFeishuError(payload, fallbackStatus = 502) {
@@ -254,16 +254,16 @@ async function searchRecords(token, baseToken, tableId, type, rawQuery) {
     if (type === 'phone') return normalizeSearch(fields['你的微信手机号']) === query
     return normalizeSearch(fields['你的抖音昵称']).includes(query)
   })
-  return { records: matches.slice(0, 30).map(recordSummary), stats: statsFor(records) }
+  return { records: matches.slice(0, 30).map(recordSummary), stats: eduQueueStats(records) }
 }
 
 async function nextUnreviewed(token, baseToken, tableId, rawAfterNumber) {
   const records = await listIndexRecords(token, baseToken, tableId)
-  const pending = records.filter((record) => !normalizeValue(record.fields?.['EDU审核结果']))
-  if (!pending.length) return { record: null, stats: statsFor(records) }
+  const pending = records.filter(isEduQueuePending)
+  if (!pending.length) return { record: null, stats: eduQueueStats(records) }
   const afterNumber = Number(rawAfterNumber)
   const record = pending.find((item) => recordNumber(item) > afterNumber) || pending[0]
-  return { record: recordSummary(record), stats: statsFor(records) }
+  return { record: recordSummary(record), stats: eduQueueStats(records) }
 }
 
 async function getRecord(token, baseToken, tableId, recordId) {
