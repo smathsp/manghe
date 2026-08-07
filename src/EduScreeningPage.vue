@@ -70,6 +70,7 @@ function attachmentItems(name) {
 
 const applicantNumber = computed(() => fieldText('编号', currentSummary.value?.number || '—'))
 const school = computed(() => fieldText('你的学校名称是？', currentSummary.value?.school || '未填写学校'))
+const douyinNickname = computed(() => fieldText('你的抖音昵称', currentSummary.value?.douyin || '未填写抖音昵称'))
 const category = computed(() => fieldText('你是属于以下哪一种分类？', currentSummary.value?.category || '未分类'))
 const isHighSchool = computed(() => /高中|准大学/.test(category.value))
 const submitTime = computed(() => dateText(field('提交时间') || currentSummary.value?.submitted_at))
@@ -446,7 +447,7 @@ onBeforeUnmount(() => {
         <div v-if="results.length" class="edu-results">
           <button v-for="record in results" :key="record.record_id" type="button" @click="openRecord(record)">
             <span class="result-no">#{{ record.number }}</span>
-            <span class="result-copy"><strong>{{ record.school }}</strong><small>{{ record.category }} · {{ lastSearchType === 'douyin' ? (record.douyin || '未填写抖音昵称') : (record.phone || '***') }}</small></span>
+            <span class="result-copy"><strong>{{ record.douyin || '未填写抖音昵称' }}</strong><small>{{ record.school }} · {{ record.category }} · {{ record.phone || '***' }}</small></span>
             <em :class="{ reviewed: record.review_result }">{{ record.review_result || '待审核' }}</em>
           </button>
         </div>
@@ -462,10 +463,10 @@ onBeforeUnmount(() => {
       <aside class="candidate-rail">
         <div class="candidate-index"><span>APPLICATION</span><strong>#{{ applicantNumber }}</strong></div>
         <div class="candidate-school">
-          <span class="student-seal">{{ school.slice(0, 1) }}</span>
-          <small>{{ category }}</small>
-          <h1>{{ school }}</h1>
-          <p>{{ currentSummary?.phone || '手机号已隐藏' }} · {{ submitTime }}</p>
+          <span class="student-seal">{{ douyinNickname.slice(0, 1) }}</span>
+          <small>抖音昵称</small>
+          <h1>{{ douyinNickname }}</h1>
+          <p>{{ school }} · {{ category }} · {{ currentSummary?.phone || '***' }} · {{ submitTime }}</p>
         </div>
         <div class="candidate-facts">
           <div><span>生活费档位</span><strong>{{ fieldText('你的每月生活费档位') }}</strong></div>
