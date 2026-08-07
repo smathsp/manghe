@@ -3,6 +3,7 @@ import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { eduRecordResponse } from './feishu-edu-response-fields.mjs'
 
 const execFileAsync = promisify(execFile)
 const BASE_TOKEN = 'BO8PbV4F3aAN0msbHVQcW8Vangd'
@@ -19,17 +20,9 @@ const SEARCH_FIELDS = [
   '你是属于以下哪一种分类？',
   '提交时间',
   'EDU审核结果',
-  'EDU审核时间',
-  'EDU审核备注',
 ]
 
 const REVIEW_RESULTS = new Set(['通过', '待补材料', '不通过'])
-const PRIVATE_ATTACHMENT_FIELDS = [
-  '【高中生】需要你的学生证',
-  '真实校园证明',
-  '【高中生】高考准考证',
-  '【大学生】教育部学籍在线验证报告',
-]
 
 let recordIndexCache = null
 
@@ -124,8 +117,6 @@ function recordSummary(record) {
     douyin: normalizeValue(fields['你的抖音昵称']),
     submitted_at: normalizeValue(fields['提交时间']),
     review_result: normalizeValue(fields['EDU审核结果']),
-    review_time: normalizeValue(fields['EDU审核时间']),
-    review_note: normalizeValue(fields['EDU审核备注']),
   }
 }
 
@@ -203,12 +194,7 @@ async function getRecord(recordId) {
   ])
   const record = tableRows(payload)[0]
   if (!record) throw new Error('没有找到这条申请记录')
-  if (normalizeValue(record.fields?.['你的微信手机号'])) record.fields['你的微信手机号'] = '***'
-  if (record.fields) {
-    delete record.fields['提交人']
-    for (const fieldName of PRIVATE_ATTACHMENT_FIELDS) delete record.fields[fieldName]
-  }
-  return record
+  return eduRecordResponse(record)
 }
 
 function localDateTime() {
