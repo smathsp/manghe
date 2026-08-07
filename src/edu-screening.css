@@ -518,7 +518,7 @@ body { overflow-y: auto; }
 .candidate-school h1 { margin: 5px 0; font-size: 26px; }
 
 .candidate-facts {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   padding: 18px 0;
   border-bottom: 1px solid var(--line);
