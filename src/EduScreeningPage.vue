@@ -550,8 +550,11 @@ onBeforeUnmount(() => {
 
       <aside class="decision-rail">
         <div class="score-card">
-          <span>MATERIAL SCORE</span>
-          <div class="score-ring" :style="{ '--score': `${completeness * 3.6}deg` }"><strong>{{ completeness }}</strong><small>/ 100</small></div>
+          <div class="score-summary">
+            <span>材料完整度</span>
+            <strong>{{ completeness }}%</strong>
+          </div>
+          <i class="score-line"><b :style="{ width: `${completeness}%` }"></b></i>
           <p>材料完整度仅作提醒，不替代人工判断。</p>
         </div>
 

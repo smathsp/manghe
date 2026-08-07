@@ -420,3 +420,168 @@ button { color: inherit; }
   .proof-grid { grid-template-columns: 1fr; }
   .edu-lightbox { padding: 16px; }
 }
+
+/* Simplified single-column review flow */
+body { overflow-y: auto; }
+
+.edu-review-page { overflow: visible; }
+
+.edu-topbar {
+  position: sticky;
+  top: 0;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 380px) minmax(110px, 1fr);
+  padding-inline: max(24px, calc((100vw - 880px) / 2));
+}
+
+.edu-entry {
+  display: block;
+  width: min(880px, calc(100% - 48px));
+  min-height: auto;
+  margin: 0 auto;
+  padding: 58px 0 80px;
+}
+
+.entry-copy {
+  display: block;
+  padding: 0 0 34px;
+}
+
+.entry-copy h1 {
+  max-width: 720px;
+  margin: 22px 0 16px;
+  font-size: clamp(46px, 7vw, 72px);
+}
+
+.entry-copy > p { width: min(680px, 100%); }
+.entry-rules { margin-top: 24px; }
+
+.entry-console {
+  display: block;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(12, 38, 40, .82);
+  box-shadow: 0 24px 80px rgba(0,0,0,.18);
+}
+
+.review-workspace {
+  display: flex;
+  width: min(880px, calc(100% - 48px));
+  height: auto;
+  margin: 0 auto;
+  padding: 28px 0 80px;
+  overflow: visible;
+  flex-direction: column;
+}
+
+.candidate-rail,
+.decision-rail,
+.dossier {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.candidate-rail {
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(8, 29, 31, .88);
+}
+
+.candidate-school {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 18px;
+  padding: 22px 0;
+}
+
+.candidate-school .student-seal {
+  grid-row: 1 / 4;
+  align-self: center;
+  margin: 0;
+}
+
+.candidate-school small,
+.candidate-school h1,
+.candidate-school p { grid-column: 2; }
+.candidate-school h1 { margin: 5px 0; font-size: 26px; }
+
+.candidate-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.candidate-facts div { padding-right: 18px; }
+.candidate-facts div + div { padding-left: 18px; border-left: 1px solid var(--line); }
+.privacy-note { margin-top: 18px; }
+
+.dossier { padding: 28px 0 18px; }
+.dossier-hero { margin: 0 2px 18px; }
+.story-card, .issue-section, .proof-section, .commitment-section { border-radius: 14px; }
+.story-grid { grid-template-columns: 1fr; }
+.proof-grid { grid-template-columns: 1fr; }
+.proof-images { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.commitment-columns { grid-template-columns: 1fr; gap: 18px; }
+
+.decision-rail {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(9,30,32,.94);
+}
+
+.score-card { padding: 0 0 18px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.score-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.score-summary span { color: #9ab0aa; font-size: 11px; font-weight: 800; }
+.score-summary strong { color: var(--acid); font-size: 24px; }
+.score-line { display: block; height: 5px; margin-top: 10px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.07); }
+.score-line b { display: block; height: 100%; border-radius: inherit; background: var(--acid); }
+.score-card p { margin-top: 9px; text-align: left; }
+
+.review-note { margin-top: 20px; }
+.review-note textarea { min-height: 110px; }
+.decision-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.decision-actions button { min-height: 68px; }
+.decision-actions button:hover { transform: translateY(-2px); }
+.skip-button { margin-top: 16px; }
+.shortcut-tip { justify-content: center; }
+.shortcut-tip span { width: auto; margin-right: 5px; }
+
+@media (max-width: 960px) {
+  .edu-topbar { grid-template-columns: 1fr auto; padding-inline: 18px; }
+  .edu-entry { width: min(100% - 36px, 880px); padding-top: 44px; }
+  .entry-copy { min-height: auto; padding: 0 0 28px; }
+  .entry-console { min-height: auto; padding: 24px; border: 1px solid var(--line); }
+  .review-workspace { width: min(100% - 36px, 880px); padding-top: 20px; }
+  .candidate-rail, .decision-rail { padding: 20px; }
+  .dossier { padding: 22px 0 16px; }
+  .score-card { display: block; }
+}
+
+@media (max-width: 620px) {
+  .edu-entry { padding: 34px 0 54px; }
+  .entry-copy { min-height: auto; padding: 0 2px 24px; }
+  .entry-copy h1 { font-size: 44px; }
+  .entry-rules { flex-direction: row; flex-wrap: wrap; }
+  .entry-console { padding: 18px; }
+  .review-workspace { width: min(100% - 24px, 880px); padding-bottom: 54px; }
+  .candidate-rail, .decision-rail { padding: 17px; }
+  .candidate-school { grid-template-columns: 52px minmax(0, 1fr); column-gap: 13px; }
+  .candidate-school .student-seal { width: 50px; height: 50px; border-radius: 15px 5px; font-size: 22px; }
+  .candidate-school h1 { font-size: 21px; }
+  .candidate-facts { grid-template-columns: 1fr; gap: 13px; }
+  .candidate-facts div { padding: 0; }
+  .candidate-facts div + div { padding: 13px 0 0; border-top: 1px solid var(--line); border-left: 0; }
+  .privacy-note { display: block; }
+  .dossier-hero { gap: 10px; }
+  .dossier-hero h2 { font-size: 25px; }
+  .story-card, .issue-section, .proof-section, .commitment-section { padding: 18px; }
+  .story-card > p { font-size: 15px; }
+  .proof-images { grid-template-columns: 1fr; }
+  .decision-actions { grid-template-columns: 1fr; }
+  .decision-actions button { min-height: 60px; }
+  .shortcut-tip span { width: 100%; text-align: center; }
+}
