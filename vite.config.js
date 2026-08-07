@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { VITE_INPUTS } from './config/site-routes.js'
 import feishuScreeningApi from './scripts/feishu-screening-api.mjs'
 import feishuEduCliApi from './scripts/feishu-edu-cli-api.mjs'
 
@@ -8,19 +9,7 @@ export default defineConfig({
   plugins: [feishuScreeningApi(), feishuEduCliApi(), vue(), tailwindcss()],
   build: {
     rollupOptions: {
-      input: {
-        main: 'index.html',
-        result: 'result/index.html',
-        activate: 'activate/index.html',
-        first50: 'first50/index.html',
-        thanks: 'thanks/index.html',
-        voidBox: 'void-box/index.html',
-        mail: 'mail/index.html',
-        screening: 'screening/index.html',
-        screeningLightboard: 'screening/lightboard/index.html',
-        eduScreening: 'edu-screening/index.html',
-        blindboxReview: 'blindbox-review/index.html',
-      },
+      input: VITE_INPUTS,
     },
   },
 })

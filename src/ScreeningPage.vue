@@ -1,7 +1,5 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
-import JSZip from 'jszip'
-import Papa from 'papaparse'
 import './screening.css'
 
 const props = defineProps({
@@ -459,7 +457,8 @@ function isOldDuplicateRow(row) {
   ].some((value) => /重复[·・\s_-]*旧记录|旧记录/.test(normalizeText(value)))
 }
 
-function parseCsv(source) {
+async function parseCsv(source) {
+  const { default: Papa } = await import('papaparse')
   return new Promise((resolve, reject) => {
     Papa.parse(source, {
       header: true,
@@ -1173,6 +1172,7 @@ async function importBatch() {
   importMessage.value = '正在读取压缩包、数据和附件索引…'
 
   try {
+    const { default: JSZip } = await import('jszip')
     const zip = await JSZip.loadAsync(zipFile.value, { createFolders: false })
     const csvEntries = Object.values(zip.files)
       .filter((entry) => (

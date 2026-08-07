@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
-import Papa from 'papaparse'
 import './blindbox-review.css'
 
 const STORAGE_KEY = 'blindbox-exchange-decisions-v4'
@@ -34,6 +33,15 @@ function norm(v) { return v == null ? '' : String(v).trim() }
 function prize(row) { return norm(row[COL.legendary]) || norm(row[COL.epic]) || norm(row[COL.common]) || '未识别' }
 function isExchange(r) { return r.action === '置换' }
 
+async function parseCsvText(text) {
+  const { default: Papa } = await import('papaparse')
+  return new Promise(resolve => Papa.parse(text, {
+    header: true,
+    skipEmptyLines: 'greedy',
+    complete: resolve,
+  }))
+}
+
 function redact(text) {
   let t = String(text || '')
   // Phone numbers (11-digit Chinese mobile)
@@ -61,7 +69,7 @@ async function importCsv() {
   importMessage.value = '解析中…'
   try {
     const text = await csvFile.value.text()
-    const { data, errors } = await new Promise(r => Papa.parse(text, { header: true, skipEmptyLines: 'greedy', complete: r }))
+    const { data, errors } = await parseCsvText(text)
     if ((errors || []).filter(e => e.type === 'Quotes').length) throw new Error('CSV 格式错误')
     const records = data
       .filter(row => norm(row[COL.number]) && norm(row[COL.nickname]))
@@ -100,7 +108,7 @@ async function importReviewResults(e) {
   if (!file) return
   try {
     const text = await file.text()
-    const { data } = await new Promise(r => Papa.parse(text, { header: true, skipEmptyLines: 'greedy', complete: r }))
+    const { data } = await parseCsvText(text)
     let imported = 0
     for (const row of data) {
       const id = norm(row['编号'] || row['id'])
