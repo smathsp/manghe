@@ -111,6 +111,12 @@ button { color: inherit; }
   cursor: pointer;
 }
 
+.topbar-actions { display: flex; align-items: center; justify-self: end; gap: 8px; }
+.topbar-actions .topbar-action { justify-self: auto; }
+.live-page-link { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; white-space: nowrap; }
+.live-page-link i { width: 8px; height: 8px; border-radius: 50%; background: #6f8580; }
+.live-page-link i.connected { background: var(--acid); box-shadow: 0 0 12px rgba(199,237,98,.55); }
+
 .edu-entry {
   position: relative;
   z-index: 1;

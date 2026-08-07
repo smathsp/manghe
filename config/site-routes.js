@@ -88,6 +88,14 @@ export const SITE_PAGES = Object.freeze([
     description: 'EDU 学生版申请审核台，核验学生身份、真实需求与体验反馈意愿。',
   },
   {
+    id: 'eduScreeningLive',
+    inputName: 'eduScreeningLive',
+    input: 'edu-screening/live/index.html',
+    paths: ['/edu-screening/live', '/edu-screening/live/index.html'],
+    title: 'EDU 学生版｜直播安全展示',
+    description: 'EDU 学生版直播安全展示页，仅同步经过筛选的申请内容。',
+  },
+  {
     id: 'blindboxReview',
     inputName: 'blindboxReview',
     input: 'blindbox-review/index.html',

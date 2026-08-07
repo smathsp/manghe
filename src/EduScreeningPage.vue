@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { createEduLiveSync } from './eduLiveSync'
 import './edu-screening.css'
 
 const phoneQuery = ref('')
@@ -21,8 +22,12 @@ const stats = ref({ total: 0, reviewed: 0, pending: 0 })
 const imageUrls = ref(new Map())
 const imageState = ref(new Map())
 const lightbox = ref(null)
+const liveViewerConnected = ref(false)
 const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 const PASSWORD_STORAGE_KEY = 'manghe-edu-screening-access-key'
+let liveSync = null
+let liveHeartbeatTimer = null
+let liveViewerTimeout = null
 
 const PROOF_FIELDS = [
   { key: '真实校园证明', label: '真实校园证明', for: 'all' },
@@ -106,6 +111,47 @@ const proofStatus = computed(() => {
 const progressPercent = computed(() => stats.value.total
   ? Math.round((stats.value.reviewed / stats.value.total) * 100)
   : 0)
+
+function buildLivePayload() {
+  if (!current.value) return null
+  return {
+    number: applicantNumber.value,
+    nickname: douyinNickname.value,
+    school: school.value,
+    category: category.value,
+    reviewResult: existingResult.value || '待审核',
+    initialReviewResult: initialReviewResult.value,
+    initialReviewNote: initialReviewNote.value,
+    reason: fieldText('请简单说明你申请EDU版本的主要原因'),
+    networkProblems: [...networkProblems.value],
+    networkSupplement: fieldText('你目前遇到的主要网络问题是什么？-其他-补充内容', ''),
+    proofStatus: proofStatus.value,
+    discovery: fieldText('你是通过什么渠道了解到鲲鹏的？哪一点让你考虑选择鲲鹏？请结合自己的使用需求简单说明。'),
+    viewOnZhang: fieldText('作为学生，你是怎么看张导的，有什么不足之处，可以怎么改善'),
+    feedbackItems: [...feedbackItems.value],
+    confirmationItems: [...confirmationItems.value],
+  }
+}
+
+function publishLiveRecord() {
+  const payload = buildLivePayload()
+  liveSync?.send(payload ? 'record' : 'clear', payload)
+}
+
+function markLiveViewerConnected() {
+  liveViewerConnected.value = true
+  window.clearTimeout(liveViewerTimeout)
+  liveViewerTimeout = window.setTimeout(() => {
+    liveViewerConnected.value = false
+  }, 10_000)
+}
+
+function handleLiveMessage(message) {
+  if (message.type !== 'viewer-ready') return
+  markLiveViewerConnected()
+  liveSync?.send('controller-heartbeat', { hasRecord: Boolean(current.value) })
+  publishLiveRecord()
+}
 
 async function api(path, body = {}, blob = false) {
   const controller = new AbortController()
@@ -217,6 +263,7 @@ async function openRecord(summary) {
     searchState.value = 'ready'
     message.value = ''
     await nextTick()
+    publishLiveRecord()
     loadProofImages()
   } catch (error) {
     searchState.value = 'error'
@@ -288,6 +335,7 @@ async function saveReview(result) {
     })
     current.value.fields['EDU审核结果'] = [result]
     current.value.fields['EDU审核备注'] = reviewNote.value
+    publishLiveRecord()
     reviewState.value = 'saved'
     reviewMessage.value = `已同步到飞书：${result}`
     stats.value.reviewed = Math.min(stats.value.total, stats.value.reviewed + (wasReviewed ? 0 : 1))
@@ -305,6 +353,7 @@ function resetSearch() {
   message.value = ''
   reviewMessage.value = ''
   revokeImages()
+  liveSync?.send('clear')
 }
 
 function onKeydown(event) {
@@ -328,9 +377,17 @@ onMounted(() => {
     accessKey.value = savedPassword
     rememberPassword.value = true
   }
+  liveSync = createEduLiveSync(handleLiveMessage)
+  liveHeartbeatTimer = window.setInterval(() => {
+    liveSync?.send('controller-heartbeat', { hasRecord: Boolean(current.value) })
+  }, 4_000)
   window.addEventListener('keydown', onKeydown)
 })
 onBeforeUnmount(() => {
+  liveSync?.send('controller-offline')
+  liveSync?.close()
+  window.clearInterval(liveHeartbeatTimer)
+  window.clearTimeout(liveViewerTimeout)
   window.removeEventListener('keydown', onKeydown)
   revokeImages()
 })
@@ -350,7 +407,13 @@ onBeforeUnmount(() => {
         <i><b :style="{ width: `${progressPercent}%` }"></b></i>
         <em>{{ stats.pending }} 待处理</em>
       </div>
-      <button v-if="current" class="topbar-action" type="button" @click="resetSearch">返回搜索</button>
+      <div class="topbar-actions">
+        <a class="topbar-action live-page-link" href="/edu-screening/live/" target="_blank" rel="noopener">
+          <i :class="{ connected: liveViewerConnected }"></i>
+          {{ liveViewerConnected ? '直播页已连接' : '打开直播页' }}
+        </a>
+        <button v-if="current" class="topbar-action" type="button" @click="resetSearch">返回搜索</button>
+      </div>
     </header>
 
     <section v-if="!current" class="edu-entry">
