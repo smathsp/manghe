@@ -203,7 +203,10 @@ async function getRecord(recordId) {
   const record = tableRows(payload)[0]
   if (!record) throw new Error('没有找到这条申请记录')
   if (normalizeValue(record.fields?.['你的微信手机号'])) record.fields['你的微信手机号'] = '***'
-  if (record.fields) delete record.fields['提交人']
+  if (record.fields) {
+    delete record.fields['提交人']
+    delete record.fields['【大学生】教育部学籍在线验证报告']
+  }
   return record
 }
 

@@ -120,6 +120,7 @@ function sanitizeRecord(record) {
   const fields = { ...(record.fields || {}) }
   if (normalizeValue(fields['你的微信手机号'])) fields['你的微信手机号'] = '***'
   delete fields['提交人']
+  delete fields['【大学生】教育部学籍在线验证报告']
   return { ...record, fields }
 }
 

@@ -74,6 +74,13 @@ const category = computed(() => fieldText('你是属于以下哪一种分类？'
 const isHighSchool = computed(() => /高中|准大学/.test(category.value))
 const submitTime = computed(() => dateText(field('提交时间') || currentSummary.value?.submitted_at))
 const existingResult = computed(() => fieldText('EDU审核结果', ''))
+const initialReviewResult = computed(() => fieldText('人工初审结果', '未初审'))
+const initialReviewNote = computed(() => fieldText('人工初审备注', '暂无初审备注'))
+const initialReviewClass = computed(() => {
+  if (initialReviewResult.value === '通过') return 'passed'
+  if (initialReviewResult.value === '不通过') return 'rejected'
+  return 'pending'
+})
 
 const proofCards = computed(() => PROOF_FIELDS
   .filter((item) => item.for === 'all' || (item.for === '高中生' && isHighSchool.value))
@@ -83,22 +90,6 @@ const confirmationItems = computed(() => valueList(field('信息确认')))
 const networkProblems = computed(() => valueList(field('你目前遇到的主要网络问题是什么？')))
 const feedbackItems = computed(() => valueList(field('是否愿意参与后续产品体验反馈？')))
 
-const completeness = computed(() => {
-  if (!current.value) return 0
-  let score = 0
-  const hasRealProof = attachmentItems('真实校园证明').length > 0
-  const hasHighSchoolProof = attachmentItems('【高中生】需要你的学生证').length > 0
-    || attachmentItems('【高中生】高考准考证').length > 0
-  const hasUniversityReport = fieldText('【大学生】教育部学籍在线验证报告', '')
-  if (isHighSchool.value ? hasHighSchoolProof : Boolean(hasUniversityReport)) score += 35
-  if (hasRealProof) score += 15
-  if (fieldText('你的学校名称是？', '')) score += 10
-  if (fieldText('请简单说明你申请EDU版本的主要原因', '').length >= 30) score += 20
-  if (feedbackItems.value.some((item) => !/不参与|只希望/.test(item))) score += 10
-  score += Math.min(10, Math.round((confirmationItems.value.length / 6) * 10))
-  return Math.min(100, score)
-})
-
 const proofStatus = computed(() => {
   if (isHighSchool.value) {
     return attachmentItems('【高中生】需要你的学生证').length
@@ -106,9 +97,9 @@ const proofStatus = computed(() => {
       ? '已提供高中生证明'
       : '缺少高中生证明'
   }
-  return fieldText('【大学生】教育部学籍在线验证报告', '')
-    ? '已填写学籍报告编号'
-    : '缺少学籍报告编号'
+  return attachmentItems('真实校园证明').length
+    ? '已提交身份材料'
+    : '未提交身份材料'
 })
 
 const progressPercent = computed(() => stats.value.total
@@ -487,7 +478,18 @@ onBeforeUnmount(() => {
       <div class="dossier">
         <section class="dossier-hero">
           <div><span>STUDENT DOSSIER</span><h2>学生申请档案</h2></div>
-          <div class="proof-pill" :class="{ warning: /缺少/.test(proofStatus) }"><i></i>{{ proofStatus }}</div>
+          <div class="proof-pill" :class="{ warning: /缺少|未提交/.test(proofStatus) }"><i></i>{{ proofStatus }}</div>
+        </section>
+
+        <section class="initial-review-card" :class="initialReviewClass">
+          <header>
+            <div><span>MANUAL PRE-REVIEW</span><h3>人工初审</h3></div>
+            <strong>{{ initialReviewResult }}</strong>
+          </header>
+          <div>
+            <span>初审备注</span>
+            <p>{{ initialReviewNote }}</p>
+          </div>
         </section>
 
         <section class="story-card primary-story">
@@ -503,10 +505,6 @@ onBeforeUnmount(() => {
 
         <section class="proof-section">
           <header class="section-title"><span>03</span><div><small>PROOF OF STUDENT</small><h3>学生身份证明</h3></div></header>
-          <div v-if="!isHighSchool" class="report-code">
-            <span>教育部学籍在线验证报告</span>
-            <strong>{{ fieldText('【大学生】教育部学籍在线验证报告') }}</strong>
-          </div>
           <div class="proof-grid">
             <article v-for="card in proofCards" :key="card.key" class="proof-card" :class="{ empty: !card.items.length }">
               <header><span>{{ card.label }}</span><em>{{ card.items.length }} 份</em></header>
@@ -549,13 +547,10 @@ onBeforeUnmount(() => {
       </div>
 
       <aside class="decision-rail">
-        <div class="score-card">
-          <div class="score-summary">
-            <span>材料完整度</span>
-            <strong>{{ completeness }}%</strong>
-          </div>
-          <i class="score-line"><b :style="{ width: `${completeness}%` }"></b></i>
-          <p>材料完整度仅作提醒，不替代人工判断。</p>
+        <div class="decision-heading">
+          <span>FINAL REVIEW</span>
+          <h3>审核判断</h3>
+          <p>结合初审意见与完整申请内容，选择最终结果。</p>
         </div>
 
         <label class="review-note">
