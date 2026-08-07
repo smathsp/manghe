@@ -160,13 +160,29 @@ button { color: inherit; }
 .console-heading small { display: inline-flex; align-items: center; gap: 6px; color: var(--acid); font-size: 10px; }
 .console-heading small::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
 .console-heading small.offline { color: var(--orange); }
+.console-tools { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.credential-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #829c96;
+  background: rgba(255,255,255,.025);
+  font-size: 9px;
+  cursor: pointer;
+}
+.credential-toggle:hover { border-color: rgba(101,214,202,.32); color: #b5cbc5; }
+.credential-toggle i { width: 6px; height: 6px; border-radius: 50%; background: #6c817c; }
+.credential-toggle i.ready { background: var(--acid); box-shadow: 0 0 9px rgba(199,237,98,.5); }
 
 .password-panel {
-  margin-top: 24px;
-  padding: 14px;
-  border: 1px solid rgba(199, 237, 98, .16);
-  border-radius: 14px;
-  background: rgba(199, 237, 98, .035);
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(2, 17, 18, .22);
 }
 .password-panel > label,
 .edu-search-card > label {
@@ -197,7 +213,8 @@ button { color: inherit; }
 .edu-search-card input:focus { border-color: rgba(101, 214, 202, .7); box-shadow: 0 0 0 3px rgba(101,214,202,.1); }
 .remember-password { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: #94aca6; font-size: 9px; cursor: pointer; }
 .remember-password input { width: 14px; height: 14px; accent-color: var(--acid); }
-.edu-search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.edu-search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
+.password-panel + .edu-search-grid { margin-top: 12px; }
 .edu-search-card { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: rgba(2,17,18,.26); }
 .edu-search-card > div { display: flex; gap: 7px; }
 .edu-search-card input { width: 100%; height: 42px; padding: 0 11px; font-size: 11px; }
@@ -391,6 +408,8 @@ button { color: inherit; }
   .entry-copy > p { width: 100%; font-size: 14px; }
   .entry-rules { flex-direction: column; gap: 10px; margin-top: 30px; }
   .entry-console { padding: 34px 18px 48px; }
+  .console-heading { align-items: start; }
+  .console-tools { align-items: flex-end; flex-direction: column; }
   .password-row { align-items: stretch; flex-direction: column; }
   .remember-password { min-height: 26px; }
   .edu-search-grid { grid-template-columns: 1fr; }

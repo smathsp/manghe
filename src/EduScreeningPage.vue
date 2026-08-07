@@ -6,6 +6,7 @@ const phoneQuery = ref('')
 const douyinQuery = ref('')
 const accessKey = ref('')
 const rememberPassword = ref(false)
+const passwordSettingsOpen = ref(false)
 const lastSearchType = ref('')
 const results = ref([])
 const current = ref(null)
@@ -137,8 +138,10 @@ function updateStats(value) {
 
 function ensurePassword() {
   if (accessKey.value) return true
+  passwordSettingsOpen.value = true
   searchState.value = 'error'
   message.value = '请先输入审核密码'
+  nextTick(() => document.querySelector('#edu-access-key')?.focus())
   return false
 }
 
@@ -349,10 +352,22 @@ onBeforeUnmount(() => {
         <div class="console-heading">
           <span>REVIEW QUEUE</span>
           <strong>学生申请队列</strong>
-          <small>{{ isLocal ? '本地 CLI 已就绪' : 'Vercel 安全连接' }}</small>
+          <div class="console-tools">
+            <small>{{ isLocal ? '本地 CLI 已就绪' : 'Vercel 安全连接' }}</small>
+            <button
+              class="credential-toggle"
+              type="button"
+              :aria-expanded="passwordSettingsOpen"
+              aria-controls="edu-password-settings"
+              @click="passwordSettingsOpen = !passwordSettingsOpen"
+            >
+              <i :class="{ ready: accessKey }"></i>
+              {{ accessKey ? '密码已设置' : '审核设置' }}
+            </button>
+          </div>
         </div>
 
-        <div class="password-panel">
+        <div v-if="passwordSettingsOpen" id="edu-password-settings" class="password-panel">
           <label for="edu-access-key"><span>审核密码</span><small>独立验证，不与查询内容一起保存</small></label>
           <div class="password-row">
             <input
