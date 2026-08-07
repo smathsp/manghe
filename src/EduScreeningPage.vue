@@ -411,12 +411,12 @@ onBeforeUnmount(() => {
 
         <div class="edu-search-grid">
           <form class="edu-search-card" @submit.prevent="search('phone')">
-            <label for="edu-phone-search"><span>手机号查找</span><small>结果只显示 ***</small></label>
+            <label for="edu-phone-search"><span>手机号查找</span><small>输入与结果均隐藏</small></label>
             <div>
               <input
                 id="edu-phone-search"
                 v-model.trim="phoneQuery"
-                type="tel"
+                type="password"
                 inputmode="numeric"
                 autocomplete="off"
                 maxlength="11"
