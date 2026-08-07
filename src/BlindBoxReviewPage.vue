@@ -95,6 +95,35 @@ async function importCsv() {
 
 function handleFile(e) { csvFile.value = e.target.files?.[0] || null; if (csvFile.value) importCsv() }
 
+async function importReviewResults(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    const { data } = await new Promise(r => Papa.parse(text, { header: true, skipEmptyLines: 'greedy', complete: r }))
+    let imported = 0
+    for (const row of data) {
+      const id = norm(row['编号'] || row['id'])
+      const result = norm(row['审核结果'] || row['result'])
+      const note = norm(row['备注'] || row['note'] || row['审核备注'])
+      if (!id || !result) continue
+      const key = allRecords.value.find(r => r.id === id)?.id
+      if (!key) continue
+      if (result === '同意') decisions.value = { ...decisions.value, [key]: 'approve' }
+      else if (result === '不同意') decisions.value = { ...decisions.value, [key]: 'reject' }
+      else continue
+      if (note) notes.value = { ...notes.value, [key]: note }
+      imported++
+    }
+    persist()
+    reviewNote.value = notes.value[current.value?.id] || ''
+    alert(`已导入 ${imported} 条审核结果`)
+  } catch (e) {
+    alert('导入失败：' + (e?.message || '格式错误'))
+  }
+  e.target.value = ''
+}
+
 function loadDecisions() {
   try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); decisions.value = s.decisions || {}; notes.value = s.notes || {} } catch {}
 }
@@ -127,6 +156,22 @@ function decide(decision) {
 function getLabel(id) {
   const d = decisions.value[id]
   return d === 'approve' ? '同意' : d === 'reject' ? '不同意' : ''
+}
+
+const searchQuery = ref('')
+const searchResults = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q || importState.value !== 'ready') return []
+  return allRecords.value
+    .map((r, i) => ({ ...r, _idx: i }))
+    .filter(r => r.name.toLowerCase().includes(q) || r.id.includes(q) || r.boxNumber.includes(q))
+    .slice(0, 10)
+})
+
+function searchAndJump(record) {
+  const idx = allRecords.value.findIndex(r => r._idx === record._idx || r.id === record.id)
+  if (idx >= 0) show(idx)
+  searchQuery.value = ''
 }
 
 function csvEscape(v) { const t = String(v ?? ''); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
@@ -197,9 +242,20 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey); clearTimeo
           <i></i>
           <div><strong>{{ decidedCount }}/{{ exchangeCount }}</strong><span>已审</span></div>
         </div>
+        <div class="ex-bar-search">
+          <input v-model="searchQuery" type="search" placeholder="搜索昵称/编号…" @keydown.enter="searchResults.length && searchAndJump(searchResults[0])">
+          <div v-if="searchResults.length" class="ex-search-drop">
+            <button v-for="r in searchResults" :key="r.id" @click="searchAndJump(r)">
+              <span>#{{ r.id }}</span>
+              <strong>{{ r.name }}</strong>
+              <small>{{ r.prize }} · {{ r.action }}</small>
+            </button>
+          </div>
+        </div>
         <div class="ex-bar-btns">
           <button @click="exportCsv" :disabled="!decidedCount">导出</button>
           <button @click="resetAll" :disabled="!decidedCount">清除</button>
+          <label class="ex-bar-btn-reimport">导入审核<input type="file" accept=".csv,text/csv" @change="importReviewResults" hidden></label>
           <label class="ex-bar-btn-reimport">更换CSV<input type="file" accept=".csv,text/csv" @change="handleFile" hidden></label>
         </div>
       </div>

@@ -75,6 +75,31 @@ body { overflow: auto !important; height: auto !important; }
 .ex-bar-stats span { color:rgba(237,230,217,.45); font-size:13px }
 .ex-bar-stats i { width:1px; height:18px; background:rgba(211,168,99,.2) }
 .ex-bar-btns { display:flex; gap:8px; margin-left:auto }
+.ex-bar-search { position:relative; margin-left:auto }
+.ex-bar-search input {
+  width:190px; padding:8px 14px; border:1px solid rgba(211,168,99,.2); border-radius:7px;
+  background:rgba(20,14,11,.6); color:#e9decb; font-size:14px; outline:none; transition:border-color .2s;
+}
+.ex-bar-search input:focus { border-color:var(--gold); width:240px }
+.ex-bar-search input::placeholder { color:rgba(237,230,217,.3) }
+.ex-search-drop {
+  position:absolute; top:100%; right:0; margin-top:4px;
+  min-width:280px; max-height:360px; overflow-y:auto;
+  border:1px solid rgba(211,168,99,.18); border-radius:10px;
+  background:rgba(24,16,12,.98); box-shadow:0 12px 40px rgba(0,0,0,.5);
+  z-index:50;
+}
+.ex-search-drop button {
+  display:flex; align-items:center; gap:12px; width:100%; padding:12px 16px;
+  border:none; border-bottom:1px solid rgba(211,168,99,.06);
+  background:transparent; color:inherit; cursor:pointer; text-align:left; transition:background .15s;
+}
+.ex-search-drop button:hover { background:rgba(211,168,99,.08) }
+.ex-search-drop button:last-child { border-bottom:none }
+.ex-search-drop button span { color:var(--gold); font-family:Georgia,serif; font-size:13px; flex-shrink:0 }
+.ex-search-drop button strong { color:#eee4d3; font-size:14px; flex:1; min-width:0 }
+.ex-search-drop button small { color:rgba(237,230,217,.4); font-size:12px }
+
 .ex-bar-btns button, .ex-bar-btn-reimport {
   padding:8px 16px; border:1px solid rgba(211,168,99,.25); border-radius:7px;
   background:transparent; color:#e9decb; font-size:14px; letter-spacing:.06em;

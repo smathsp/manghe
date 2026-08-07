@@ -3,7 +3,7 @@ const BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf'
 const TABLE_ID = 'tblVnUXJQUgpjcMi'
 
 // --- Blind Box Exchange Review ---
-const EXCHANGE_BASE_TOKEN = 'NBO0b2rrbaS0sws8YTFc4XlOnlf' // TODO: update once resolved from wiki
+const EXCHANGE_BASE_TOKEN = 'EBjBbpH37arONtsnef7cE5DknSd'
 const EXCHANGE_TABLE_ID = 'tblVqVj7G7jZclVT'
 
 const EXCHANGE_SEARCH_FIELDS = [
