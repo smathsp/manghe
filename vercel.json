@@ -6,7 +6,7 @@
     "api/feishu/*.js": {
       "maxDuration": 60
     },
-    "api/edu/*.js": {
+    "api/edu/[action].js": {
       "maxDuration": 60
     }
   }
