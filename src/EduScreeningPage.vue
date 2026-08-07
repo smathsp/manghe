@@ -127,6 +127,7 @@ async function search(type) {
     const data = await api('/api/edu/search', { type, query })
     results.value = data.records || []
     updateStats(data.stats)
+    passwordSettingsOpen.value = false
     searchState.value = 'ready'
     message.value = results.value.length ? `找到 ${results.value.length} 位申请人` : '没有匹配的申请人'
   } catch (error) {
@@ -165,6 +166,9 @@ async function openRecord(summary) {
     current.value = data.record
     currentSummary.value = summary
     reviewNote.value = normalize(data.record.fields?.['EDU审核备注'])
+    reviewState.value = 'idle'
+    reviewMessage.value = ''
+    passwordSettingsOpen.value = false
     results.value = []
     phoneQuery.value = ''
     douyinQuery.value = ''
@@ -189,6 +193,7 @@ function retryLastRequest() {
 async function saveReview(result) {
   if (!current.value || reviewState.value === 'saving') return
   if (result !== '通过' && !reviewNote.value.trim()) {
+    reviewState.value = 'error'
     reviewMessage.value = result === '待补材料'
       ? '请在备注里写明需要补充什么材料'
       : '请简单写明不通过原因'
@@ -209,7 +214,6 @@ async function saveReview(result) {
     reviewMessage.value = `已同步到飞书：${result}`
     stats.value.reviewed = Math.min(stats.value.total, stats.value.reviewed + (wasReviewed ? 0 : 1))
     stats.value.pending = Math.max(0, stats.value.total - stats.value.reviewed)
-    window.setTimeout(() => openNext(), 620)
   } catch (error) {
     reviewState.value = 'error'
     reviewMessage.value = error.message
@@ -220,6 +224,7 @@ function resetSearch() {
   current.value = null
   currentSummary.value = null
   message.value = ''
+  reviewState.value = 'idle'
   reviewMessage.value = ''
 }
 
@@ -235,6 +240,13 @@ watch([accessKey, rememberPassword], () => {
     window.localStorage.setItem(PASSWORD_STORAGE_KEY, accessKey.value)
   } else {
     window.localStorage.removeItem(PASSWORD_STORAGE_KEY)
+  }
+})
+
+watch(reviewNote, () => {
+  if (reviewState.value === 'error') {
+    reviewState.value = 'idle'
+    reviewMessage.value = ''
   }
 })
 
@@ -266,6 +278,10 @@ onBeforeUnmount(() => {
         <em>{{ stats.pending }} 待处理</em>
       </div>
       <div class="topbar-actions">
+        <div v-if="current" class="topbar-candidate" aria-label="当前申请人">
+          <span>#{{ applicantNumber }}</span><strong>{{ douyinNickname }}</strong>
+        </div>
+        <a v-if="current" class="topbar-action topbar-decision-link" href="#edu-decision">审核判断</a>
         <button v-if="current" class="topbar-action" type="button" @click="resetSearch">返回搜索</button>
       </div>
     </header>
@@ -274,15 +290,15 @@ onBeforeUnmount(() => {
       <div class="entry-copy">
         <span class="entry-kicker"><i></i> EDU ACCESS · 2026</span>
         <h1>把真正需要的人，<br><em>先找出来。</em></h1>
-        <p>先验学生身份，再看真实需求与反馈意愿。审核结果通过安全服务同步回飞书。</p>
+        <p>先看人工初审结论，再看真实需求与反馈意愿。确认后的审核结果会安全同步回飞书。</p>
         <div class="entry-rules">
-          <span><b>01</b> 身份真实</span>
+          <span><b>01</b> 已完成初审</span>
           <span><b>02</b> 需求明确</span>
           <span><b>03</b> 愿意反馈</span>
         </div>
       </div>
 
-      <div class="entry-console">
+      <div class="entry-console" :aria-busy="searchState === 'loading'">
         <div class="console-heading">
           <span>REVIEW QUEUE</span>
           <strong>学生申请队列</strong>
@@ -352,17 +368,17 @@ onBeforeUnmount(() => {
         </div>
 
         <button class="next-candidate" type="button" :disabled="searchState === 'loading'" @click="openNext">
-          <span><small>NEXT CANDIDATE</small><strong>打开下一位已完成人工初审的学生</strong></span>
+          <span><small>已初审 · 待 EDU 审核</small><strong>打开下一位学生</strong></span>
           <b>→</b>
         </button>
 
-        <div v-if="message" class="edu-message" :class="searchState">
+        <div v-if="message" class="edu-message" :class="searchState" role="status" aria-live="polite">
           <span>{{ message }}</span>
           <button v-if="searchState === 'error' && lastRequest" type="button" @click="retryLastRequest">重试</button>
         </div>
 
         <div v-if="results.length" class="edu-results">
-          <button v-for="record in results" :key="record.record_id" type="button" @click="openRecord(record)">
+          <button v-for="record in results" :key="record.record_id" type="button" :disabled="searchState === 'loading'" @click="openRecord(record)">
             <span class="result-no">#{{ record.number }}</span>
             <span class="result-copy"><strong>{{ record.douyin || '未填写抖音昵称' }}</strong><small>{{ record.school }} · {{ record.category }} · {{ record.phone || '***' }}</small></span>
             <em :class="{ reviewed: record.review_result }">{{ record.review_result || '待审核' }}</em>
@@ -370,8 +386,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="console-footnote">
-          <span>审核原则</span>
-          <p>手机号由服务端直接替换为 ***；审核密码只在选择后保存在当前浏览器。</p>
+          <span>队列规则</span>
+          <p>“下一位”只读取已完成人工初审的学生；手机号始终显示为 ***，审核密码仅按你的选择保存在当前浏览器。</p>
         </div>
       </div>
     </section>
@@ -440,11 +456,11 @@ onBeforeUnmount(() => {
         </section>
       </div>
 
-      <aside class="decision-rail">
+      <aside id="edu-decision" class="decision-rail" :class="{ 'is-saved': reviewState === 'saved' }">
         <div class="decision-heading">
           <span>FINAL REVIEW</span>
           <h3>审核判断</h3>
-          <p>结合初审意见与完整申请内容，选择最终结果。</p>
+          <p>结合初审意见与申请内容选择结果；保存后由你确认再进入下一位。</p>
         </div>
 
         <label class="review-note">
@@ -458,8 +474,10 @@ onBeforeUnmount(() => {
           <button class="reject" type="button" :disabled="reviewState === 'saving'" @click="saveReview('不通过')"><span>3</span><strong>不通过</strong><small>记录审核原因</small></button>
         </div>
 
-        <p v-if="reviewMessage" class="review-message" :class="reviewState">{{ reviewMessage }}</p>
-        <button class="skip-button" type="button" @click="openNext">暂不判断，跳到下一位 →</button>
+        <p v-if="reviewMessage" class="review-message" :class="reviewState" role="status" aria-live="polite">{{ reviewMessage }}</p>
+        <button class="skip-button" :class="{ ready: reviewState === 'saved' }" type="button" :disabled="reviewState === 'saving'" @click="openNext">
+          {{ reviewState === 'saved' ? '已保存，打开下一位 →' : '暂不判断，打开下一位 →' }}
+        </button>
         <div class="shortcut-tip"><span>键盘快捷键</span><b>1 通过</b><b>2 待补</b><b>3 不通过</b></div>
       </aside>
     </section>
