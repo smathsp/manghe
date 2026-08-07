@@ -6,7 +6,11 @@ const loadLegacyPage = (loadComponent) => Promise.all([
 ]).then(([, componentModule]) => componentModule.default)
 
 const PAGE_LOADERS = Object.freeze({
-  home: () => loadLegacyPage(() => import('../App.vue')),
+  home: () => Promise.all([
+    import('../hub.css'),
+    import('../HubPage.vue'),
+  ]).then(([, componentModule]) => componentModule.default),
+  blindboxVoting: () => loadLegacyPage(() => import('../App.vue')),
   results: () => loadLegacyPage(() => import('../ResultsPage.vue')),
   activation: () => loadLegacyPage(() => import('../ActivationPage.vue')),
   first50: () => loadLegacyPage(() => import('../First50Page.vue')),
@@ -30,9 +34,7 @@ function normalizedPath(pathname) {
 
 export function resolveSiteRoute({ pathname, hostname }) {
   const path = normalizedPath(pathname)
-  const isMailboxDomainRoot = hostname === 'zd.smathsp.com'
-    && (path === '' || path === '/index.html')
-  const id = isMailboxDomainRoot ? 'mailbox' : (PAGE_ID_BY_PATH.get(path) || 'home')
+  const id = PAGE_ID_BY_PATH.get(path) || 'home'
   const page = PAGE_BY_ID.get(id)
   return { ...page, load: PAGE_LOADERS[id] }
 }
