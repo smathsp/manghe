@@ -157,13 +157,13 @@ async function openNext() {
   if (searchState.value === 'loading') return
   lastRequest.value = { kind: 'next' }
   searchState.value = 'loading'
-  message.value = '正在寻找下一位已完成人工初审的申请人…'
+  message.value = '正在寻找下一位人工初审通过的申请人…'
   try {
     const data = await api('/api/edu/next', { afterNumber: current.value ? applicantNumber.value : '' })
     updateStats(data.stats)
     if (!data.record) {
       searchState.value = 'ready'
-      message.value = '暂无已完成人工初审且等待 EDU 审核的学生'
+      message.value = '暂无人工初审通过且等待 EDU 审核的学生'
       navigationMessage.value = message.value
       if (current.value) reviewMessage.value = message.value
       return
@@ -195,7 +195,7 @@ async function openAdjacent(direction) {
     updateStats(data.stats)
     if (!data.record) {
       searchState.value = 'ready'
-      navigationMessage.value = '暂无其他已完成人工初审的学生'
+      navigationMessage.value = '暂无其他人工初审通过的学生'
       return
     }
     await openRecord(data.record)
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
         </div>
 
         <button class="next-candidate" type="button" :disabled="searchState === 'loading'" @click="openNext">
-          <span><small>已初审 · 待 EDU 审核</small><strong>打开下一位学生</strong></span>
+          <span><small>初审通过 · 待 EDU 审核</small><strong>打开下一位学生</strong></span>
           <b>→</b>
         </button>
 
@@ -442,7 +442,7 @@ onBeforeUnmount(() => {
 
         <div class="console-footnote">
           <span>队列规则</span>
-          <p>“下一位”只读取已完成人工初审的学生；手机号始终显示为 ***，审核密码仅按你的选择保存在当前浏览器。</p>
+          <p>“下一位”只读取人工初审结果为“通过”的学生；手机号始终显示为 ***，审核密码仅按你的选择保存在当前浏览器。</p>
         </div>
       </div>
     </section>

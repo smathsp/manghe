@@ -39,16 +39,27 @@ export function isEduInitialReviewed(record) {
   return hasValue(record?.fields?.['人工初审结果'])
 }
 
+export function isEduInitialApproved(record) {
+  const value = record?.fields?.['人工初审结果']
+  const values = Array.isArray(value) ? value : [value]
+  return values.some((item) => {
+    if (item && typeof item === 'object') {
+      return String(item.name ?? item.text ?? item.value ?? '').trim() === '通过'
+    }
+    return String(item ?? '').trim() === '通过'
+  })
+}
+
 export function isEduFinalReviewed(record) {
   return hasValue(record?.fields?.['EDU审核结果'])
 }
 
 export function isEduQueuePending(record) {
-  return isEduInitialReviewed(record) && !isEduFinalReviewed(record)
+  return isEduInitialApproved(record) && !isEduFinalReviewed(record)
 }
 
 export function eduQueueStats(records) {
-  const eligible = records.filter(isEduInitialReviewed)
+  const eligible = records.filter(isEduInitialApproved)
   const reviewed = eligible.filter(isEduFinalReviewed).length
   return {
     total: eligible.length,

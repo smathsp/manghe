@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import {
   eduQueueStats,
   eduRecordResponse,
-  isEduInitialReviewed,
+  isEduInitialApproved,
   isEduQueuePending,
 } from './feishu-edu-response-fields.mjs'
 
@@ -172,7 +172,7 @@ async function searchRecords(type, rawQuery) {
 
 async function findCandidate(rawAfterNumber = '', rawDirection = 'next', includeReviewed = false) {
   const records = await listIndexRecords()
-  const candidates = records.filter(includeReviewed ? isEduInitialReviewed : isEduQueuePending)
+  const candidates = records.filter(includeReviewed ? isEduInitialApproved : isEduQueuePending)
   if (!candidates.length) return { record: null, stats: eduQueueStats(records) }
   const afterNumber = Number(rawAfterNumber)
   const direction = rawDirection === 'previous' ? 'previous' : 'next'

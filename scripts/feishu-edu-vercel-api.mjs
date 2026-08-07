@@ -1,7 +1,7 @@
 import {
   eduQueueStats,
   eduRecordResponse,
-  isEduInitialReviewed,
+  isEduInitialApproved,
   isEduQueuePending,
 } from './feishu-edu-response-fields.mjs'
 
@@ -260,7 +260,7 @@ async function searchRecords(token, baseToken, tableId, type, rawQuery) {
 
 async function findCandidate(token, baseToken, tableId, rawAfterNumber, rawDirection = 'next', includeReviewed = false) {
   const records = await listIndexRecords(token, baseToken, tableId)
-  const candidates = records.filter(includeReviewed ? isEduInitialReviewed : isEduQueuePending)
+  const candidates = records.filter(includeReviewed ? isEduInitialApproved : isEduQueuePending)
   if (!candidates.length) return { record: null, stats: eduQueueStats(records) }
   const afterNumber = Number(rawAfterNumber)
   const direction = rawDirection === 'previous' ? 'previous' : 'next'
