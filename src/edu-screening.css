@@ -280,6 +280,13 @@ button { color: inherit; }
 .candidate-index { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .candidate-index span { color: #64827c; font-size: 8px; font-weight: 900; letter-spacing: .2em; }
 .candidate-index strong { color: var(--acid); font-family: "Arial Narrow", sans-serif; font-size: 28px; }
+.candidate-navigation { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.candidate-navigation button { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 13px; border: 1px solid var(--line); border-radius: 11px; color: #cbdcd7; background: rgba(255,255,255,.025); cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease, opacity .18s ease; }
+.candidate-navigation button:hover:not(:disabled) { border-color: rgba(101,214,202,.4); background: rgba(101,214,202,.07); transform: translateY(-1px); }
+.candidate-navigation button:disabled { opacity: .5; cursor: wait; }
+.candidate-navigation button span { color: var(--acid); font-size: 19px; line-height: 1; }
+.candidate-navigation button strong { font-size: 13px; }
+.candidate-navigation-message { margin: 10px 0 0; color: #ffaaa2; font-size: 12px; line-height: 1.5; }
 .candidate-school { padding: 26px 0; border-bottom: 1px solid var(--line); }
 .student-seal { display: grid; width: 60px; height: 60px; place-items: center; margin-bottom: 18px; border: 1px solid rgba(101,214,202,.34); border-radius: 20px 6px 20px 6px; color: var(--cyan); background: rgba(101,214,202,.08); font-family: Georgia, serif; font-size: 27px; }
 .candidate-school small { color: var(--orange); font-size: 10px; font-weight: 800; }
@@ -718,9 +725,6 @@ html {
 .review-note textarea { transition: border-color .18s ease, box-shadow .18s ease; }
 .review-note textarea:focus { box-shadow: 0 0 0 4px rgba(101,214,202,.09); }
 .decision-actions button:hover:not(:disabled) { transform: translateY(-2px); background: rgba(255,255,255,.045); }
-.skip-button.ready { border: 1px solid rgba(199, 237, 98, .28); border-radius: 11px; color: #e2f6ad; background: rgba(199, 237, 98, .09); font-weight: 800; }
-.skip-button.ready:hover:not(:disabled) { border-color: rgba(199, 237, 98, .5); background: rgba(199, 237, 98, .14); }
-
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,

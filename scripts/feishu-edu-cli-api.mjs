@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import {
   eduQueueStats,
   eduRecordResponse,
+  isEduInitialReviewed,
   isEduQueuePending,
 } from './feishu-edu-response-fields.mjs'
 
@@ -169,12 +170,15 @@ async function searchRecords(type, rawQuery) {
   return { records: matches.slice(0, 30).map(recordSummary), stats: eduQueueStats(records) }
 }
 
-async function nextUnreviewed(rawAfterNumber = '') {
+async function findCandidate(rawAfterNumber = '', rawDirection = 'next', includeReviewed = false) {
   const records = await listIndexRecords()
-  const pending = records.filter(isEduQueuePending)
-  if (!pending.length) return { record: null, stats: eduQueueStats(records) }
+  const candidates = records.filter(includeReviewed ? isEduInitialReviewed : isEduQueuePending)
+  if (!candidates.length) return { record: null, stats: eduQueueStats(records) }
   const afterNumber = Number(rawAfterNumber)
-  const record = pending.find((item) => recordNumber(item) > afterNumber) || pending[0]
+  const direction = rawDirection === 'previous' ? 'previous' : 'next'
+  const record = direction === 'previous'
+    ? [...candidates].reverse().find((item) => recordNumber(item) < afterNumber) || candidates[candidates.length - 1]
+    : candidates.find((item) => recordNumber(item) > afterNumber) || candidates[0]
   return { record: recordSummary(record), stats: eduQueueStats(records) }
 }
 
@@ -252,7 +256,11 @@ async function handleApi(req, res) {
       return
     }
     if (pathname === '/api/edu/next') {
-      sendJson(res, 200, await nextUnreviewed(body.afterNumber))
+      sendJson(res, 200, await findCandidate(
+        body.afterNumber,
+        body.direction,
+        body.includeReviewed === true,
+      ))
       return
     }
     if (pathname === '/api/edu/record') {

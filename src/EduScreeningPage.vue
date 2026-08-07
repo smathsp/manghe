@@ -16,10 +16,12 @@ const searchState = ref('idle')
 const reviewState = ref('idle')
 const message = ref('')
 const reviewMessage = ref('')
+const navigationMessage = ref('')
 const reviewNote = ref('')
 const stats = ref({ total: 0, reviewed: 0, pending: 0 })
 const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 const PASSWORD_STORAGE_KEY = 'manghe-edu-screening-access-key'
+let autoAdvanceTimer = null
 
 function normalize(value) {
   if (value == null) return ''
@@ -112,6 +114,19 @@ function ensurePassword() {
   return false
 }
 
+function clearAutoAdvance() {
+  if (!autoAdvanceTimer) return
+  window.clearTimeout(autoAdvanceTimer)
+  autoAdvanceTimer = null
+}
+
+function scrollReviewToTop() {
+  window.scrollTo({ top: 0, behavior: 'auto' })
+  document.querySelectorAll('.candidate-rail, .dossier, .decision-rail').forEach((element) => {
+    element.scrollTo({ top: 0, behavior: 'auto' })
+  })
+}
+
 async function search(type) {
   if (!ensurePassword()) return
   const query = type === 'phone' ? phoneQuery.value.trim() : douyinQuery.value.trim()
@@ -137,6 +152,7 @@ async function search(type) {
 }
 
 async function openNext() {
+  clearAutoAdvance()
   if (!ensurePassword()) return
   if (searchState.value === 'loading') return
   lastRequest.value = { kind: 'next' }
@@ -148,16 +164,49 @@ async function openNext() {
     if (!data.record) {
       searchState.value = 'ready'
       message.value = '暂无已完成人工初审且等待 EDU 审核的学生'
+      navigationMessage.value = message.value
+      if (current.value) reviewMessage.value = message.value
       return
     }
     await openRecord(data.record)
   } catch (error) {
     searchState.value = 'error'
     message.value = error.message
+    if (current.value) {
+      navigationMessage.value = error.message
+      reviewState.value = 'error'
+      reviewMessage.value = error.message
+    }
+  }
+}
+
+async function openAdjacent(direction) {
+  clearAutoAdvance()
+  if (!ensurePassword() || !current.value || searchState.value === 'loading') return
+  lastRequest.value = { kind: 'adjacent', direction }
+  searchState.value = 'loading'
+  navigationMessage.value = ''
+  try {
+    const data = await api('/api/edu/next', {
+      afterNumber: applicantNumber.value,
+      direction,
+      includeReviewed: true,
+    })
+    updateStats(data.stats)
+    if (!data.record) {
+      searchState.value = 'ready'
+      navigationMessage.value = '暂无其他已完成人工初审的学生'
+      return
+    }
+    await openRecord(data.record)
+  } catch (error) {
+    searchState.value = 'error'
+    navigationMessage.value = error.message
   }
 }
 
 async function openRecord(summary) {
+  clearAutoAdvance()
   lastRequest.value = { kind: 'record', summary }
   searchState.value = 'loading'
   message.value = '正在展开完整申请材料…'
@@ -168,6 +217,7 @@ async function openRecord(summary) {
     reviewNote.value = normalize(data.record.fields?.['EDU审核备注'])
     reviewState.value = 'idle'
     reviewMessage.value = ''
+    navigationMessage.value = ''
     passwordSettingsOpen.value = false
     results.value = []
     phoneQuery.value = ''
@@ -175,7 +225,7 @@ async function openRecord(summary) {
     searchState.value = 'ready'
     message.value = ''
     await nextTick()
-    window.scrollTo({ top: 0 })
+    scrollReviewToTop()
   } catch (error) {
     searchState.value = 'error'
     message.value = error.message
@@ -187,11 +237,12 @@ function retryLastRequest() {
   if (!request) return
   if (request.kind === 'search') search(request.type)
   if (request.kind === 'next') openNext()
+  if (request.kind === 'adjacent') openAdjacent(request.direction)
   if (request.kind === 'record') openRecord(request.summary)
 }
 
 async function saveReview(result) {
-  if (!current.value || reviewState.value === 'saving') return
+  if (!current.value || ['saving', 'saved'].includes(reviewState.value)) return
   if (result !== '通过' && !reviewNote.value.trim()) {
     reviewState.value = 'error'
     reviewMessage.value = result === '待补材料'
@@ -214,6 +265,7 @@ async function saveReview(result) {
     reviewMessage.value = `已同步到飞书：${result}`
     stats.value.reviewed = Math.min(stats.value.total, stats.value.reviewed + (wasReviewed ? 0 : 1))
     stats.value.pending = Math.max(0, stats.value.total - stats.value.reviewed)
+    autoAdvanceTimer = window.setTimeout(() => openNext(), 700)
   } catch (error) {
     reviewState.value = 'error'
     reviewMessage.value = error.message
@@ -221,11 +273,13 @@ async function saveReview(result) {
 }
 
 function resetSearch() {
+  clearAutoAdvance()
   current.value = null
   currentSummary.value = null
   message.value = ''
   reviewState.value = 'idle'
   reviewMessage.value = ''
+  navigationMessage.value = ''
 }
 
 function onKeydown(event) {
@@ -259,6 +313,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKeydown)
 })
 onBeforeUnmount(() => {
+  clearAutoAdvance()
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -395,6 +450,15 @@ onBeforeUnmount(() => {
     <section v-else class="review-workspace">
       <aside class="candidate-rail">
         <div class="candidate-index"><span>APPLICATION</span><strong>#{{ applicantNumber }}</strong></div>
+        <nav class="candidate-navigation" aria-label="申请人切换">
+          <button type="button" :disabled="searchState === 'loading'" @click="openAdjacent('previous')">
+            <span>←</span><strong>上一位</strong>
+          </button>
+          <button type="button" :disabled="searchState === 'loading'" @click="openAdjacent('next')">
+            <strong>下一位</strong><span>→</span>
+          </button>
+        </nav>
+        <p v-if="navigationMessage" class="candidate-navigation-message" role="status" aria-live="polite">{{ navigationMessage }}</p>
         <div class="candidate-school">
           <span class="student-seal">{{ douyinNickname.slice(0, 1) }}</span>
           <small>抖音昵称</small>
@@ -460,7 +524,7 @@ onBeforeUnmount(() => {
         <div class="decision-heading">
           <span>FINAL REVIEW</span>
           <h3>审核判断</h3>
-          <p>结合初审意见与申请内容选择结果；保存后由你确认再进入下一位。</p>
+          <p>结合初审意见与申请内容选择结果；保存成功后会自动进入下一位待审核学生。</p>
         </div>
 
         <label class="review-note">
@@ -469,15 +533,13 @@ onBeforeUnmount(() => {
         </label>
 
         <div class="decision-actions">
-          <button class="approve" type="button" :disabled="reviewState === 'saving'" @click="saveReview('通过')"><span>1</span><strong>通过</strong><small>身份与需求可信</small></button>
-          <button class="supplement-action" type="button" :disabled="reviewState === 'saving'" @click="saveReview('待补材料')"><span>2</span><strong>待补材料</strong><small>保留候选资格</small></button>
-          <button class="reject" type="button" :disabled="reviewState === 'saving'" @click="saveReview('不通过')"><span>3</span><strong>不通过</strong><small>记录审核原因</small></button>
+          <button class="approve" type="button" :disabled="['saving', 'saved'].includes(reviewState)" @click="saveReview('通过')"><span>1</span><strong>通过</strong><small>身份与需求可信</small></button>
+          <button class="supplement-action" type="button" :disabled="['saving', 'saved'].includes(reviewState)" @click="saveReview('待补材料')"><span>2</span><strong>待补材料</strong><small>保留候选资格</small></button>
+          <button class="reject" type="button" :disabled="['saving', 'saved'].includes(reviewState)" @click="saveReview('不通过')"><span>3</span><strong>不通过</strong><small>记录审核原因</small></button>
         </div>
 
         <p v-if="reviewMessage" class="review-message" :class="reviewState" role="status" aria-live="polite">{{ reviewMessage }}</p>
-        <button class="skip-button" :class="{ ready: reviewState === 'saved' }" type="button" :disabled="reviewState === 'saving'" @click="openNext">
-          {{ reviewState === 'saved' ? '已保存，打开下一位 →' : '暂不判断，打开下一位 →' }}
-        </button>
+        <button class="skip-button" type="button" :disabled="reviewState === 'saving'" @click="openNext">暂不判断，打开下一位待审核 →</button>
         <div class="shortcut-tip"><span>键盘快捷键</span><b>1 通过</b><b>2 待补</b><b>3 不通过</b></div>
       </aside>
     </section>

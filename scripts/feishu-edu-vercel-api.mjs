@@ -1,6 +1,7 @@
 import {
   eduQueueStats,
   eduRecordResponse,
+  isEduInitialReviewed,
   isEduQueuePending,
 } from './feishu-edu-response-fields.mjs'
 
@@ -257,12 +258,15 @@ async function searchRecords(token, baseToken, tableId, type, rawQuery) {
   return { records: matches.slice(0, 30).map(recordSummary), stats: eduQueueStats(records) }
 }
 
-async function nextUnreviewed(token, baseToken, tableId, rawAfterNumber) {
+async function findCandidate(token, baseToken, tableId, rawAfterNumber, rawDirection = 'next', includeReviewed = false) {
   const records = await listIndexRecords(token, baseToken, tableId)
-  const pending = records.filter(isEduQueuePending)
-  if (!pending.length) return { record: null, stats: eduQueueStats(records) }
+  const candidates = records.filter(includeReviewed ? isEduInitialReviewed : isEduQueuePending)
+  if (!candidates.length) return { record: null, stats: eduQueueStats(records) }
   const afterNumber = Number(rawAfterNumber)
-  const record = pending.find((item) => recordNumber(item) > afterNumber) || pending[0]
+  const direction = rawDirection === 'previous' ? 'previous' : 'next'
+  const record = direction === 'previous'
+    ? [...candidates].reverse().find((item) => recordNumber(item) < afterNumber) || candidates[candidates.length - 1]
+    : candidates.find((item) => recordNumber(item) > afterNumber) || candidates[0]
   return { record: recordSummary(record), stats: eduQueueStats(records) }
 }
 
@@ -322,8 +326,13 @@ export async function handleEduApi(request, response) {
       return
     }
     if (pathname === '/api/edu/next') {
-      sendJson(response, 200, await nextUnreviewed(
-        token, config.baseToken, config.tableId, body.afterNumber,
+      sendJson(response, 200, await findCandidate(
+        token,
+        config.baseToken,
+        config.tableId,
+        body.afterNumber,
+        body.direction,
+        body.includeReviewed === true,
       ))
       return
     }
