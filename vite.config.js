@@ -2,9 +2,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import feishuScreeningApi from './scripts/feishu-screening-api.mjs'
+import feishuEduCliApi from './scripts/feishu-edu-cli-api.mjs'
 
 export default defineConfig({
-  plugins: [feishuScreeningApi(), vue(), tailwindcss()],
+  plugins: [feishuScreeningApi(), feishuEduCliApi(), vue(), tailwindcss()],
   build: {
     rollupOptions: {
       input: {
@@ -17,6 +18,7 @@ export default defineConfig({
         mail: 'mail/index.html',
         screening: 'screening/index.html',
         screeningLightboard: 'screening/lightboard/index.html',
+        eduScreening: 'edu-screening/index.html',
         blindboxReview: 'blindbox-review/index.html',
       },
     },

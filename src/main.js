@@ -10,6 +10,7 @@ import VoidBoxPage from './VoidBoxPage.vue'
 import ScreeningPage from './ScreeningPage.vue'
 import LightboardScreeningPage from './LightboardScreeningPage.vue'
 import BlindBoxReviewPage from './BlindBoxReviewPage.vue'
+import EduScreeningPage from './EduScreeningPage.vue'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '')
 const isResultsPage = normalizedPath === '/result'
@@ -33,8 +34,12 @@ const isLightboardScreeningPage = normalizedPath === '/screening/lightboard'
   || normalizedPath.endsWith('/screening/lightboard/index.html')
 const isBlindBoxReviewPage = normalizedPath === '/blindbox-review'
   || normalizedPath.endsWith('/blindbox-review/index.html')
+const isEduScreeningPage = normalizedPath === '/edu-screening'
+  || normalizedPath.endsWith('/edu-screening/index.html')
 
-const RootComponent = isBlindBoxReviewPage
+const RootComponent = isEduScreeningPage
+  ? EduScreeningPage
+  : isBlindBoxReviewPage
   ? BlindBoxReviewPage
   : isLightboardScreeningPage
   ? LightboardScreeningPage
@@ -123,6 +128,14 @@ if (RootComponent === BlindBoxReviewPage) {
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
     '盲盒中奖置换审核页面，逐条审核用户置换请求。',
+  )
+}
+
+if (RootComponent === EduScreeningPage) {
+  document.title = 'EDU 学生版｜申请审核台'
+  document.querySelector('meta[name="description"]')?.setAttribute(
+    'content',
+    'EDU 学生版申请审核台，核验学生身份、真实需求与体验反馈意愿。',
   )
 }
 
