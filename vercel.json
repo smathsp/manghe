@@ -1,5 +1,6 @@
 {
   "framework": "vite",
+  "regions": ["hkg1"],
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {

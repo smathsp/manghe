@@ -3,6 +3,10 @@ const DEFAULT_BASE_TOKEN = 'ZaWNbPjyoambOdsCSmtcfpQtnbf'
 const DEFAULT_TABLE_ID = 'tblp1P1xwCySxO5H'
 const MAX_BODY_BYTES = 48 * 1024
 const MAX_ATTACHMENT_REQUESTS = 40
+const MAX_MEDIA_BATCH_SIZE = 5
+const MEDIA_REQUEST_INTERVAL_MS = 240
+const FEISHU_READ_TIMEOUT_MS = 10 * 1000
+const DIRECT_URL_CACHE_TTL_MS = 20 * 60 * 60 * 1000
 const INDEX_CACHE_TTL_MS = 30 * 1000
 const REVIEW_RESULTS = new Set(['通过', '不通过'])
 const ACTIVE_REVIEW_RESULTS = new Set(['', '待审核', '通过', '不通过'])
@@ -29,6 +33,9 @@ let tenantTokenCache = null
 let recordIndexCache = null
 let recordIndexPromise = null
 let recordIndexVersion = 0
+let mediaRequestQueue = Promise.resolve()
+let nextMediaRequestAt = 0
+const directUrlCache = new Map()
 
 function sendJson(response, status, data) {
   response.statusCode = status
@@ -122,7 +129,9 @@ function friendlyFeishuError(payload, fallbackStatus = 502) {
   const code = payload?.code
   const rawMessage = payload?.msg || payload?.message || '飞书接口请求失败'
   let message = rawMessage
-  if (code === 99991672 || /scope|permission/i.test(rawMessage)) {
+  if (code === 99991400 || fallbackStatus === 429 || /frequency limit|too many requests/i.test(rawMessage)) {
+    message = '飞书附件服务请求频繁，请稍后重试'
+  } else if (code === 99991672 || /scope|permission/i.test(rawMessage)) {
     message = '机器人缺少飞书权限，请开通多维表格和云文档附件读取权限'
   } else if (fallbackStatus === 403 || /forbidden/i.test(rawMessage)) {
     message = '飞书拒绝访问，请把应用添加为“鲲鹏匠人”多维表格的协作者并授予可编辑权限'
@@ -135,9 +144,30 @@ function friendlyFeishuError(payload, fallbackStatus = 502) {
   return error
 }
 
-async function remoteFetch(url, options) {
+async function remoteFetch(url, options = {}, { timeoutMs = FEISHU_READ_TIMEOUT_MS, retries = 0 } = {}) {
+  let lastError = null
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetch(url, { ...options, signal: controller.signal })
+    } catch (error) {
+      lastError = error
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 180 * (attempt + 1)))
+        continue
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  if (lastError?.name === 'AbortError') {
+    const error = new Error('飞书读取超时，请稍后重试')
+    error.status = 504
+    throw error
+  }
   try {
-    return await fetch(url, options)
+    throw lastError
   } catch {
     const error = new Error('无法连接飞书开放平台，请稍后重试')
     error.status = 502
@@ -145,7 +175,7 @@ async function remoteFetch(url, options) {
   }
 }
 
-async function feishuJson(path, { token, method = 'GET', body } = {}) {
+async function feishuJson(path, { token, method = 'GET', body, retries } = {}) {
   const response = await remoteFetch(`${FEISHU_ORIGIN}${path}`, {
     method,
     headers: {
@@ -153,7 +183,7 @@ async function feishuJson(path, { token, method = 'GET', body } = {}) {
       ...(body ? { 'Content-Type': 'application/json; charset=utf-8' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
-  })
+  }, { retries: retries ?? (method === 'GET' ? 1 : 0) })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || payload.code) {
     throw friendlyFeishuError(payload, response.ok ? 400 : response.status || 502)
@@ -172,6 +202,7 @@ async function getTenantToken(appId, appSecret) {
   const payload = await feishuJson('/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
     body: { app_id: appId, app_secret: appSecret },
+    retries: 1,
   })
   if (!payload.tenant_access_token) throw new Error('未能获取机器人访问凭证')
   const expiresIn = Math.max(600, Number(payload.expire) || 7200)
@@ -296,6 +327,7 @@ async function queueData(
   rawAfterNumber = '',
   rawDirection = 'next',
   includeReviewed = false,
+  includeRecord = false,
 ) {
   const afterNumber = Number(normalizeValue(rawAfterNumber))
   const direction = rawDirection === 'previous' ? 'previous' : 'next'
@@ -310,8 +342,12 @@ async function queueData(
     : candidates.find((record) => !Number.isFinite(afterNumber) || recordNumber(record) > afterNumber)
       || candidates[0]
     || null
+  const recordSummary = next ? summary(next) : null
   return {
-    record: next ? summary(next) : null,
+    record: recordSummary,
+    fullRecord: recordSummary && includeRecord
+      ? await getRecord(token, config, recordSummary.record_id)
+      : null,
     stats: {
       total: records.length,
       pending: pending.length,
@@ -354,6 +390,12 @@ function validateMediaRequestUrl(rawUrl, fileToken) {
   } catch {
     return ''
   }
+}
+
+function mediaExtra(rawUrl, fileToken) {
+  const validUrl = validateMediaRequestUrl(rawUrl, fileToken)
+  if (!validUrl) return ''
+  return new URL(validUrl).searchParams.get('extra') || ''
 }
 
 function findDirectUrl(value, fileToken, allowUnscoped = false) {
@@ -400,68 +442,188 @@ function findAttachmentExtra(value, fileToken) {
   return ''
 }
 
-async function requestDirectUrl(token, requestUrl, fileToken) {
-  const response = await remoteFetch(requestUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok || payload.code) {
-    throw friendlyFeishuError(payload, response.ok ? 400 : response.status || 502)
-  }
-  return findDirectUrl(payload, fileToken) || findDirectUrl(payload, fileToken, true)
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-async function attachmentDirectUrl(token, config, recordId, request, metadata) {
+function scheduleMediaRequest(task) {
+  const run = mediaRequestQueue.catch(() => {}).then(task)
+  mediaRequestQueue = run.catch(() => {})
+  return run
+}
+
+function isRateLimited(response, payload) {
+  return response.status === 429
+    || payload?.code === 99991400
+    || /frequency limit|too many requests/i.test(payload?.msg || payload?.message || '')
+}
+
+function rateLimitDelay(response, attempt) {
+  const resetSeconds = Number(response.headers.get('x-ogw-ratelimit-reset'))
+  if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+    return resetSeconds * 1000 + 120
+  }
+  return 420 * (2 ** attempt)
+}
+
+async function requestDirectUrls(token, requestUrl, fileTokens) {
+  return scheduleMediaRequest(async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const requestDelay = Math.max(0, nextMediaRequestAt - Date.now())
+      if (requestDelay) await wait(requestDelay)
+      nextMediaRequestAt = Date.now() + MEDIA_REQUEST_INTERVAL_MS
+      const response = await remoteFetch(requestUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (isRateLimited(response, payload) && attempt < 2) {
+        const retryDelay = rateLimitDelay(response, attempt)
+        if (retryDelay <= 3_000) {
+          await wait(retryDelay)
+          continue
+        }
+      }
+      if (!response.ok || payload.code) {
+        const error = friendlyFeishuError(payload, response.ok ? 400 : response.status || 502)
+        error.retryAfter = Number(response.headers.get('x-ogw-ratelimit-reset')) || 0
+        throw error
+      }
+
+      const urls = new Map()
+      for (const fileToken of fileTokens) {
+        const url = findDirectUrl(payload, fileToken)
+          || (fileTokens.length === 1 ? findDirectUrl(payload, fileToken, true) : '')
+        if (url) urls.set(fileToken, url)
+      }
+      return urls
+    }
+    return new Map()
+  })
+}
+
+async function resolveMediaBatch(token, batch, requestUrl) {
+  try {
+    return {
+      urls: await requestDirectUrls(token, requestUrl, batch.map((item) => item.fileToken)),
+      error: null,
+    }
+  } catch (error) {
+    return { urls: new Map(), error }
+  }
+}
+
+function validateAttachmentRequest(request) {
   const fieldName = String(request.fieldName || '')
   const fileToken = String(request.fileToken || '')
   if (!ATTACHMENT_FIELDS.has(fieldName)) throw new Error('不支持读取该附件字段')
   if (!fileToken || fileToken.length > 256) throw new Error('附件标识不正确')
+  return { ...request, fieldName, fileToken }
+}
 
-  const supplied = validateMediaRequestUrl(request.tmpUrl, fileToken)
-  if (supplied) {
-    const url = await requestDirectUrl(token, supplied, fileToken)
-    if (url) return url
+function cachedDirectUrl(fileToken) {
+  const cached = directUrlCache.get(fileToken)
+  if (cached?.expiresAt > Date.now()) return cached.url
+  if (cached) directUrlCache.delete(fileToken)
+  return ''
+}
+
+function cacheDirectUrl(fileToken, url) {
+  directUrlCache.set(fileToken, { url, expiresAt: Date.now() + DIRECT_URL_CACHE_TTL_MS })
+  while (directUrlCache.size > 300) {
+    directUrlCache.delete(directUrlCache.keys().next().value)
   }
+}
 
-  const metadataUrl = findDirectUrl(metadata, fileToken)
-  if (metadataUrl) return metadataUrl
-  const extra = findAttachmentExtra(metadata, fileToken)
-  const params = new URLSearchParams({ file_tokens: fileToken })
-  if (extra) params.set('extra', extra)
-  const fallback = `${FEISHU_ORIGIN}/open-apis/drive/v1/medias/batch_get_tmp_download_url?${params}`
-  const url = await requestDirectUrl(token, fallback, fileToken)
-  if (!url) throw new Error('飞书没有返回可用的图片直链')
-  return url
+function chunks(items, size) {
+  const result = []
+  for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
+  return result
+}
+
+function combinedMediaExtra(attachments) {
+  const combined = { bitablePerm: { attachments: {} } }
+  let hasPermission = false
+  for (const attachment of attachments) {
+    const rawExtra = mediaExtra(attachment.tmpUrl, attachment.fileToken)
+    if (!rawExtra) continue
+    try {
+      const permission = JSON.parse(rawExtra)?.bitablePerm
+      if (!permission) continue
+      if (permission.tableId) combined.bitablePerm.tableId = permission.tableId
+      if (permission.rev != null) combined.bitablePerm.rev = permission.rev
+      for (const [fieldId, records] of Object.entries(permission.attachments || {})) {
+        if (!combined.bitablePerm.attachments[fieldId]) combined.bitablePerm.attachments[fieldId] = {}
+        for (const [recordId, tokens] of Object.entries(records || {})) {
+          const current = combined.bitablePerm.attachments[fieldId][recordId] || []
+          combined.bitablePerm.attachments[fieldId][recordId] = [...new Set([
+            ...current,
+            ...(Array.isArray(tokens) ? tokens : []),
+          ])]
+          hasPermission = true
+        }
+      }
+    } catch {
+      // A batch without merged permission metadata can still work for ordinary Bases.
+    }
+  }
+  return hasPermission ? JSON.stringify(combined) : ''
 }
 
 async function attachmentDirectUrls(token, config, recordId, rawAttachments) {
   if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
-  const attachments = Array.isArray(rawAttachments) ? rawAttachments.slice(0, MAX_ATTACHMENT_REQUESTS) : []
-  const metadata = attachments.length
-    ? await feishuJson(
-      `/open-apis/base/v3/bases/${config.baseToken}/tables/${config.tableId}/get_attachments`,
-      { token, method: 'POST', body: { record_id_list: [recordId] } },
-    )
-    : {}
-  const results = await Promise.all(attachments.map(async (attachment) => {
-    try {
-      const url = await attachmentDirectUrl(token, config, recordId, attachment, metadata)
-      return {
-        fieldName: String(attachment.fieldName || ''),
-        fileToken: String(attachment.fileToken || ''),
-        filename: String(attachment.filename || '飞书图片'),
-        url,
-      }
-    } catch (error) {
-      return {
-        fieldName: String(attachment.fieldName || ''),
-        fileToken: String(attachment.fileToken || ''),
-        filename: String(attachment.filename || '飞书图片'),
-        error: error?.message || '图片直链获取失败',
+  const attachments = (Array.isArray(rawAttachments) ? rawAttachments.slice(0, MAX_ATTACHMENT_REQUESTS) : [])
+    .map(validateAttachmentRequest)
+  const results = new Map()
+  const unresolved = []
+
+  for (const attachment of attachments) {
+    const cachedUrl = cachedDirectUrl(attachment.fileToken)
+    if (cachedUrl) {
+      results.set(attachment.fileToken, { url: cachedUrl })
+      continue
+    }
+    unresolved.push(attachment)
+  }
+
+  const batches = chunks(unresolved, MAX_MEDIA_BATCH_SIZE)
+  const batchResults = await Promise.all(batches.map((batch) => {
+    const params = new URLSearchParams()
+    for (const attachment of batch) params.append('file_tokens', attachment.fileToken)
+    const extra = combinedMediaExtra(batch)
+    if (extra) params.set('extra', extra)
+    const requestUrl = `${FEISHU_ORIGIN}/open-apis/drive/v1/medias/batch_get_tmp_download_url?${params}`
+    return resolveMediaBatch(token, batch, requestUrl)
+  }))
+
+  for (let index = 0; index < batches.length; index += 1) {
+    const batch = batches[index]
+    const { urls, error } = batchResults[index]
+    for (const attachment of batch) {
+      if (!error) {
+        const url = urls.get(attachment.fileToken)
+        if (url) {
+          cacheDirectUrl(attachment.fileToken, url)
+          results.set(attachment.fileToken, { url })
+        } else {
+          results.set(attachment.fileToken, { error: '飞书没有返回可用的附件直链' })
+        }
+      } else {
+        results.set(attachment.fileToken, {
+          error: error?.message || '附件直链获取失败',
+          rateLimited: error?.code === 99991400 || error?.status === 429,
+          retryAfter: error?.retryAfter || 0,
+        })
       }
     }
+  }
+
+  return attachments.map((attachment) => ({
+    fieldName: attachment.fieldName,
+    fileToken: attachment.fileToken,
+    filename: String(attachment.filename || '飞书附件'),
+    size: Number(attachment.size) || 0,
+    ...(results.get(attachment.fileToken) || { error: '附件直链获取失败' }),
   }))
-  return results
 }
 
 export async function handleArtisanApi(request, response, defaults = {}) {
@@ -488,6 +650,7 @@ export async function handleArtisanApi(request, response, defaults = {}) {
         body.afterNumber,
         body.direction,
         body.includeReviewed === true,
+        body.includeRecord === true,
       ))
       return
     }
