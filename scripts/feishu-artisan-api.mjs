@@ -3,6 +3,7 @@ const DEFAULT_BASE_TOKEN = 'ZaWNbPjyoambOdsCSmtcfpQtnbf'
 const DEFAULT_TABLE_ID = 'tblp1P1xwCySxO5H'
 const MAX_BODY_BYTES = 48 * 1024
 const MAX_ATTACHMENT_REQUESTS = 40
+const INDEX_CACHE_TTL_MS = 30 * 1000
 const REVIEW_RESULTS = new Set(['通过', '不通过'])
 const ACTIVE_REVIEW_RESULTS = new Set(['', '待审核', '通过', '不通过'])
 
@@ -21,9 +22,13 @@ const SUMMARY_FIELDS = [
   '所在城市',
   '你的身份是？',
   '直播审核结果',
+  '直播审核备注',
 ]
 
 let tenantTokenCache = null
+let recordIndexCache = null
+let recordIndexPromise = null
+let recordIndexVersion = 0
 
 function sendJson(response, status, data) {
   response.statusCode = status
@@ -229,6 +234,28 @@ async function listRecords(token, config, fieldNames = SUMMARY_FIELDS) {
   return records
 }
 
+async function cachedIndexRecords(token, config) {
+  const key = `${config.baseToken}:${config.tableId}`
+  if (recordIndexCache?.key === key && recordIndexCache.expiresAt > Date.now()) {
+    return recordIndexCache.records
+  }
+  if (recordIndexPromise?.key === key) return recordIndexPromise.promise
+
+  const version = recordIndexVersion
+  const promise = listRecords(token, config, [...SUMMARY_FIELDS, '你的公开账号'])
+    .then((records) => {
+      if (version === recordIndexVersion) {
+        recordIndexCache = { key, records, expiresAt: Date.now() + INDEX_CACHE_TTL_MS }
+      }
+      return records
+    })
+    .finally(() => {
+      if (recordIndexPromise?.promise === promise) recordIndexPromise = null
+    })
+  recordIndexPromise = { key, promise }
+  return promise
+}
+
 async function getRecord(token, config, recordId) {
   if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
   const payload = await feishuJson(
@@ -241,11 +268,8 @@ async function getRecord(token, config, recordId) {
 function searchScore(record, query) {
   const fields = record.fields || {}
   const values = [
-    fields['编号'],
     fields['联系电话【微信联系】'],
-    fields['微信昵称'],
     fields['抖音昵称'],
-    fields['你的公开账号'],
   ].map(normalizeSearch)
   if (values.some((value) => value === query)) return 3
   if (values.some((value) => value.startsWith(query))) return 2
@@ -255,8 +279,8 @@ function searchScore(record, query) {
 
 async function searchRecords(token, config, rawQuery) {
   const query = normalizeSearch(rawQuery)
-  if (!query || query.length > 100) throw new Error('请输入 1–100 个字符进行搜索')
-  const records = await listRecords(token, config, [...SUMMARY_FIELDS, '你的公开账号'])
+  if (!query || query.length > 100) throw new Error('请输入手机号或抖音昵称进行搜索')
+  const records = await cachedIndexRecords(token, config)
   return records
     .filter(isActiveRecord)
     .map((record) => ({ record, score: searchScore(record, query) }))
@@ -266,14 +290,25 @@ async function searchRecords(token, config, rawQuery) {
     .map((item) => summary(item.record))
 }
 
-async function queueData(token, config, rawAfterNumber = '') {
+async function queueData(
+  token,
+  config,
+  rawAfterNumber = '',
+  rawDirection = 'next',
+  includeReviewed = false,
+) {
   const afterNumber = Number(normalizeValue(rawAfterNumber))
-  const records = (await listRecords(token, config))
+  const direction = rawDirection === 'previous' ? 'previous' : 'next'
+  const records = (await cachedIndexRecords(token, config))
     .filter(isActiveRecord)
     .sort((a, b) => recordNumber(a) - recordNumber(b))
   const pending = records.filter((record) => ['', '待审核'].includes(activeStatus(record)))
-  const next = pending.find((record) => !Number.isFinite(afterNumber) || recordNumber(record) > afterNumber)
-    || pending[0]
+  const candidates = includeReviewed ? records : pending
+  const next = direction === 'previous'
+    ? [...candidates].reverse().find((record) => !Number.isFinite(afterNumber) || recordNumber(record) < afterNumber)
+      || candidates[candidates.length - 1]
+    : candidates.find((record) => !Number.isFinite(afterNumber) || recordNumber(record) > afterNumber)
+      || candidates[0]
     || null
   return {
     record: next ? summary(next) : null,
@@ -286,19 +321,24 @@ async function queueData(token, config, rawAfterNumber = '') {
   }
 }
 
-async function updateReview(token, config, recordId, rawResult) {
+async function updateReview(token, config, recordId, rawResult, rawNote) {
   if (!/^rec[a-z0-9]+$/i.test(recordId)) throw new Error('记录 ID 格式不正确')
   const result = String(rawResult || '').trim()
   if (!REVIEW_RESULTS.has(result)) throw new Error('审核结果只能是“通过”或“不通过”')
+  const note = String(rawNote || '').trim()
+  if (note.length > 500) throw new Error('直播审核备注不能超过 500 个字符')
   const payload = await feishuJson(
     `/open-apis/bitable/v1/apps/${config.baseToken}/tables/${config.tableId}/records/${recordId}`,
     {
       token,
       method: 'PUT',
-      body: { fields: { 直播审核结果: result } },
+      body: { fields: { 直播审核结果: result, 直播审核备注: note } },
     },
   )
-  return { record_id: recordId, result, record: payload.data?.record }
+  recordIndexVersion += 1
+  recordIndexCache = null
+  recordIndexPromise = null
+  return { record_id: recordId, result, note, record: payload.data?.record }
 }
 
 function validateMediaRequestUrl(rawUrl, fileToken) {
@@ -442,7 +482,13 @@ export async function handleArtisanApi(request, response, defaults = {}) {
       return
     }
     if (pathname === '/api/artisan/next') {
-      sendJson(response, 200, await queueData(token, config, body.afterNumber))
+      sendJson(response, 200, await queueData(
+        token,
+        config,
+        body.afterNumber,
+        body.direction,
+        body.includeReviewed === true,
+      ))
       return
     }
     if (pathname === '/api/artisan/record') {
@@ -457,6 +503,7 @@ export async function handleArtisanApi(request, response, defaults = {}) {
         config,
         String(body.recordId || ''),
         body.result,
+        body.note,
       ))
       return
     }

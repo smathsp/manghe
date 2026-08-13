@@ -19,13 +19,21 @@ const pageState = ref('idle')
 const reviewState = ref('idle')
 const message = ref('')
 const reviewMessage = ref('')
+const reviewNote = ref('')
+const navigationMessage = ref('')
+const nextCacheState = ref('idle')
 const images = ref(new Map())
 const imageState = ref('idle')
 const imageMessage = ref('')
 const lightboxImage = ref(null)
 const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 const PASSWORD_STORAGE_KEY = 'manghe-artisan-screening-access-key'
+const RECORD_CACHE_TTL_MS = 4 * 60 * 1000
+const recordBundleCache = new Map()
 let requestVersion = 0
+let prefetchVersion = 0
+let adjacentNextPrefetch = null
+let pendingNextPrefetch = null
 
 function normalize(value) {
   if (value == null) return ''
@@ -175,24 +183,19 @@ function persistAccessKey() {
   }
 }
 
-async function loadImages(record, version) {
-  images.value = new Map()
-  imageMessage.value = ''
+async function fetchImageBundle(record) {
   const attachments = ATTACHMENT_FIELDS.flatMap((item) => (
     attachmentList(record.fields?.[item.name], item.name)
   ))
   if (!attachments.length) {
-    imageState.value = 'ready'
-    return
+    return { images: new Map(), imageState: 'ready', imageMessage: '' }
   }
 
-  imageState.value = 'loading'
   try {
     const data = await api('/api/artisan/attachment-urls', {
       recordId: record.record_id,
       attachments,
     })
-    if (version !== requestVersion) return
     const next = new Map()
     let failures = 0
     for (const item of data.images || []) {
@@ -200,35 +203,114 @@ async function loadImages(record, version) {
       next.get(item.fieldName).push(item)
       if (item.error || !item.url) failures += 1
     }
-    images.value = next
-    imageState.value = 'ready'
-    if (failures) imageMessage.value = `${failures} 张图片直链获取失败，请检查飞书附件读取权限`
+    return {
+      images: next,
+      imageState: 'ready',
+      imageMessage: failures ? `${failures} 个附件直链获取失败，请检查飞书附件读取权限` : '',
+    }
   } catch (error) {
-    if (version !== requestVersion) return
-    imageState.value = 'error'
-    imageMessage.value = error?.message || '飞书图片直链获取失败'
+    return {
+      images: new Map(),
+      imageState: 'error',
+      imageMessage: error?.message || '飞书附件直链获取失败',
+    }
   }
 }
 
-async function openRecord(summary) {
+function trimRecordCache() {
+  while (recordBundleCache.size > 5) {
+    const oldestKey = recordBundleCache.keys().next().value
+    recordBundleCache.delete(oldestKey)
+  }
+}
+
+async function fetchRecordBundle(summary) {
+  const recordId = summary?.record_id
+  if (!recordId) throw new Error('申请记录编号缺失')
+
+  const cached = recordBundleCache.get(recordId)
+  if (cached && cached.expiresAt > Date.now()) return cached.promise
+  if (cached) recordBundleCache.delete(recordId)
+
+  const promise = (async () => {
+    const data = await api('/api/artisan/record', { recordId })
+    const media = await fetchImageBundle(data.record)
+    return { record: data.record, ...media }
+  })()
+  recordBundleCache.set(recordId, {
+    expiresAt: Date.now() + RECORD_CACHE_TTL_MS,
+    promise,
+  })
+  trimRecordCache()
+
+  try {
+    return await promise
+  } catch (error) {
+    if (recordBundleCache.get(recordId)?.promise === promise) recordBundleCache.delete(recordId)
+    throw error
+  }
+}
+
+async function requestQueueRecord(afterNumber = '', direction = 'next', includeReviewed = false) {
+  const data = await api('/api/artisan/next', { afterNumber, direction, includeReviewed })
+  const bundle = data.record ? await fetchRecordBundle(data.record) : null
+  return { ...data, bundle }
+}
+
+function warmNextRecords(record) {
+  const afterNumber = normalize(record?.fields?.['编号'])
+  if (!afterNumber) return
+  const version = ++prefetchVersion
+  nextCacheState.value = 'loading'
+
+  adjacentNextPrefetch = {
+    afterNumber,
+    promise: requestQueueRecord(afterNumber, 'next', true),
+  }
+  pendingNextPrefetch = {
+    afterNumber,
+    promise: requestQueueRecord(afterNumber, 'next', false),
+  }
+
+  adjacentNextPrefetch.promise.then((data) => {
+    if (version !== prefetchVersion) return
+    nextCacheState.value = data.record ? 'ready' : 'empty'
+  }).catch(() => {
+    if (version === prefetchVersion) nextCacheState.value = 'error'
+  })
+  pendingNextPrefetch.promise.catch(() => {})
+}
+
+function activateBundle(bundle) {
+  current.value = bundle.record
+  images.value = new Map(bundle.images)
+  imageState.value = bundle.imageState
+  imageMessage.value = bundle.imageMessage
+  reviewNote.value = normalize(bundle.record.fields?.['直播审核备注'])
+  results.value = []
+  pageState.value = 'ready'
+  message.value = ''
+  navigationMessage.value = ''
+  reviewState.value = 'idle'
+  reviewMessage.value = ''
+  passwordOpen.value = false
+  persistAccessKey()
+  window.scrollTo({ top: 0, behavior: 'auto' })
+  warmNextRecords(bundle.record)
+}
+
+async function openRecord(summary, preparedBundle = null) {
   if (!summary?.record_id) return
   const version = ++requestVersion
   pageState.value = 'loading'
   message.value = '正在读取完整申请资料…'
   lightboxImage.value = null
+  imageState.value = 'loading'
+  imageMessage.value = ''
   try {
-    const data = await api('/api/artisan/record', { recordId: summary.record_id })
+    const bundle = preparedBundle || await fetchRecordBundle(summary)
     if (version !== requestVersion) return
-    current.value = data.record
-    results.value = []
-    pageState.value = 'ready'
-    message.value = ''
-    reviewState.value = 'idle'
-    reviewMessage.value = ''
-    passwordOpen.value = false
-    persistAccessKey()
-    window.scrollTo({ top: 0, behavior: 'auto' })
-    await loadImages(data.record, version)
+    activateBundle(bundle)
   } catch (error) {
     if (version !== requestVersion) return
     pageState.value = 'error'
@@ -241,8 +323,12 @@ async function openNext(afterNumber = '') {
   pageState.value = 'loading'
   message.value = current.value ? '正在打开下一位待审核申请人…' : '正在查找待审核申请人…'
   try {
-    const data = await api('/api/artisan/next', { afterNumber })
-    stats.value = data.stats || stats.value
+    const usedCached = pendingNextPrefetch?.afterNumber === normalize(afterNumber)
+    const cached = usedCached
+      ? pendingNextPrefetch.promise
+      : null
+    const data = await (cached || requestQueueRecord(afterNumber, 'next', false))
+    if (!usedCached) stats.value = data.stats || stats.value
     if (!data.record) {
       pageState.value = 'ready'
       message.value = '当前没有待审核记录'
@@ -250,17 +336,41 @@ async function openNext(afterNumber = '') {
       persistAccessKey()
       return
     }
-    await openRecord(data.record)
+    await openRecord(data.record, data.bundle)
   } catch (error) {
     pageState.value = 'error'
     message.value = error?.message || '待审核队列读取失败'
   }
 }
 
+async function openAdjacent(direction) {
+  if (!current.value || !validateAccess() || pageState.value === 'loading') return
+  const afterNumber = number.value
+  pageState.value = 'loading'
+  navigationMessage.value = direction === 'previous' ? '正在打开上一位…' : '正在打开下一位…'
+  try {
+    const usedCached = direction === 'next' && adjacentNextPrefetch?.afterNumber === afterNumber
+    const cached = usedCached
+      ? adjacentNextPrefetch.promise
+      : null
+    const data = await (cached || requestQueueRecord(afterNumber, direction, true))
+    if (!usedCached) stats.value = data.stats || stats.value
+    if (!data.record) {
+      pageState.value = 'ready'
+      navigationMessage.value = direction === 'previous' ? '已经是第一位' : '已经是最后一位'
+      return
+    }
+    await openRecord(data.record, data.bundle)
+  } catch (error) {
+    pageState.value = 'error'
+    navigationMessage.value = error?.message || '切换申请人失败'
+  }
+}
+
 async function search() {
   if (!validateAccess() || pageState.value === 'loading') return
   if (!query.value.trim()) {
-    message.value = '请输入编号、手机号、微信昵称或抖音昵称'
+    message.value = '请输入手机号或抖音昵称'
     return
   }
   pageState.value = 'loading'
@@ -289,8 +399,11 @@ async function saveReview(result) {
     await api('/api/artisan/review', {
       recordId: current.value.record_id,
       result,
+      note: reviewNote.value,
     })
     current.value.fields['直播审核结果'] = [result]
+    current.value.fields['直播审核备注'] = reviewNote.value.trim()
+    recordBundleCache.delete(current.value.record_id)
     if (previousResult === '通过') stats.value.passed = Math.max(0, stats.value.passed - 1)
     if (previousResult === '不通过') stats.value.rejected = Math.max(0, stats.value.rejected - 1)
     if (result === '通过') stats.value.passed += 1
@@ -320,7 +433,8 @@ function handleKeydown(event) {
   if (!current.value || lightboxImage.value || ['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) return
   if (event.key === '1') saveReview('通过')
   if (event.key === '2') saveReview('不通过')
-  if (event.key === 'ArrowRight') openNext(number.value)
+  if (event.key === 'ArrowLeft') openAdjacent('previous')
+  if (event.key === 'ArrowRight') openAdjacent('next')
 }
 
 onMounted(() => {
@@ -334,6 +448,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   requestVersion += 1
+  prefetchVersion += 1
+  recordBundleCache.clear()
   window.removeEventListener('keydown', handleKeydown)
 })
 </script>
@@ -372,16 +488,16 @@ onBeforeUnmount(() => {
           {{ pageState === 'loading' ? '正在连接飞书…' : '打开下一位待审核申请人' }}
         </button>
 
-        <div class="entry-divider"><span>或搜索指定申请</span></div>
+        <div class="entry-divider"><span>或按手机号 / 抖音昵称查询</span></div>
         <form class="artisan-search" @submit.prevent="search">
-          <input v-model.trim="query" type="search" autocomplete="off" placeholder="编号 / 手机号 / 微信昵称 / 抖音昵称">
+          <input v-model.trim="query" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="手机号或抖音昵称（输入内容已隐藏）" placeholder="手机号 / 抖音昵称（输入内容会隐藏）">
           <button type="submit" :disabled="pageState === 'loading'">搜索</button>
         </form>
         <p v-if="message" class="entry-message" :class="pageState">{{ message }}</p>
         <div v-if="results.length" class="search-results">
           <button v-for="record in results" :key="record.record_id" type="button" @click="openRecord(record)">
             <span>#{{ normalize(record.fields['编号']) || '—' }}</span>
-            <strong>{{ normalize(record.fields['微信昵称']) || normalize(record.fields['抖音昵称']) || '未填写昵称' }}</strong>
+            <strong>{{ normalize(record.fields['抖音昵称']) || '未填写抖音昵称' }}</strong>
             <small>{{ maskPhone(record.fields['联系电话【微信联系】']) }}</small>
             <em>{{ normalize(record.fields['直播审核结果']) || '待审核' }}</em>
           </button>
@@ -398,9 +514,26 @@ onBeforeUnmount(() => {
           <div class="hero-meta">
             <span>{{ fieldText('所在城市', '城市未填写') }}</span>
             <span>{{ submitTime }}</span>
-            <span :class="['status-pill', reviewResult === '通过' ? 'passed' : reviewResult === '不通过' ? 'rejected' : 'pending']">{{ reviewResult }}</span>
           </div>
           <p class="hero-lead">先看身份与公开账号，再核对动手经历、工作台和过往作品，最后完成审核。</p>
+          <div :class="['hero-review-status', reviewResult === '通过' ? 'passed' : reviewResult === '不通过' ? 'rejected' : 'pending']">
+            <span>当前直播审核结果</span>
+            <strong>{{ reviewResult }}</strong>
+            <p v-if="fieldText('直播审核备注', '')">上次备注：{{ fieldText('直播审核备注', '') }}</p>
+            <p v-else>暂无审核备注</p>
+          </div>
+          <nav class="applicant-navigation" aria-label="切换申请人">
+            <button type="button" :disabled="pageState === 'loading' || reviewState === 'saving'" @click="openAdjacent('previous')">← 上一位</button>
+            <div>
+              <strong>申请编号 #{{ number }}</strong>
+              <small v-if="nextCacheState === 'ready'">下一位资料与附件已自动缓存</small>
+              <small v-else-if="nextCacheState === 'loading'">正在缓存下一位资料…</small>
+              <small v-else-if="nextCacheState === 'error'">下一位将在切换时读取</small>
+              <small v-else>已到队列末尾</small>
+            </div>
+            <button type="button" :disabled="pageState === 'loading' || reviewState === 'saving'" @click="openAdjacent('next')">下一位 →</button>
+          </nav>
+          <p v-if="navigationMessage" class="navigation-message">{{ navigationMessage }}</p>
         </section>
 
         <section class="document-section">
@@ -520,13 +653,21 @@ onBeforeUnmount(() => {
             <span>#{{ number }} · {{ displayName }}</span>
             <span>{{ attachmentCount }} 张图片证据</span>
           </div>
+          <label class="review-note-field">
+            <span>审核备注 <em>选填</em></span>
+            <textarea v-model="reviewNote" maxlength="500" rows="4" placeholder="例如：动手经验扎实，作品完整；或记录需要复核的原因。可以留空。"></textarea>
+            <small>{{ reviewNote.length }} / 500 · 会和审核结果一起保存到飞书</small>
+          </label>
           <div class="decision-actions">
             <button class="approve" type="button" :disabled="reviewState === 'saving'" @click="saveReview('通过')"><span>1</span><strong>通过</strong><small>确认具备匠人资格</small></button>
             <button class="reject" type="button" :disabled="reviewState === 'saving'" @click="saveReview('不通过')"><span>2</span><strong>不通过</strong><small>本次申请暂不通过</small></button>
           </div>
           <p v-if="reviewMessage" class="review-message" :class="reviewState">{{ reviewMessage }}</p>
-          <button class="skip-action" type="button" :disabled="pageState === 'loading' || reviewState === 'saving'" @click="openNext(number)">暂不判断，打开下一位待审核 →</button>
-          <small class="shortcut-hint">快捷键：1 通过 · 2 不通过 · → 下一位</small>
+          <div class="decision-navigation">
+            <button type="button" :disabled="pageState === 'loading' || reviewState === 'saving'" @click="openAdjacent('previous')">← 上一位</button>
+            <button type="button" :disabled="pageState === 'loading' || reviewState === 'saving'" @click="openAdjacent('next')">暂不判断，下一位 →</button>
+          </div>
+          <small class="shortcut-hint">快捷键：1 通过 · 2 不通过 · ← 上一位 · → 下一位</small>
         </section>
       </div>
     </template>
