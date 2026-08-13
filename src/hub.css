@@ -118,6 +118,7 @@ a { color: inherit; }
 .accent-red { --accent: #ee5e4f; }
 .accent-orange { --accent: #ef923d; }
 .accent-blue { --accent: #4e91e8; }
+.accent-green { --accent: #72845d; }
 .accent-rose { --accent: #db7292; }
 .accent-slate { --accent: #8a928f; }
 

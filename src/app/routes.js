@@ -20,6 +20,7 @@ const PAGE_LOADERS = Object.freeze({
   screening: () => import('../ScreeningPage.vue').then((module) => module.default),
   screeningLightboard: () => import('../LightboardScreeningPage.vue').then((module) => module.default),
   eduScreening: () => import('../EduScreeningPage.vue').then((module) => module.default),
+  artisanScreening: () => import('../ArtisanScreeningPage.vue').then((module) => module.default),
   blindboxReview: () => import('../BlindBoxReviewPage.vue').then((module) => module.default),
 })
 

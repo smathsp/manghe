@@ -4,9 +4,10 @@ import tailwindcss from '@tailwindcss/vite'
 import { VITE_INPUTS } from './config/site-routes.js'
 import feishuScreeningApi from './scripts/feishu-screening-api.mjs'
 import feishuEduCliApi from './scripts/feishu-edu-cli-api.mjs'
+import feishuArtisanApi from './scripts/feishu-artisan-api.mjs'
 
 export default defineConfig({
-  plugins: [feishuScreeningApi(), feishuEduCliApi(), vue(), tailwindcss()],
+  plugins: [feishuScreeningApi(), feishuEduCliApi(), feishuArtisanApi(), vue(), tailwindcss()],
   build: {
     rollupOptions: {
       input: VITE_INPUTS,

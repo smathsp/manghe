@@ -88,6 +88,14 @@ export const SITE_PAGES = Object.freeze([
     description: 'EDU 学生版申请审核台，核验学生身份、真实需求与体验反馈意愿。',
   },
   {
+    id: 'artisanScreening',
+    inputName: 'artisanScreening',
+    input: 'artisan-screening/index.html',
+    paths: ['/artisan-screening', '/artisan-screening/index.html'],
+    title: '鲲鹏匠人｜申请审核台',
+    description: '鲲鹏匠人招募申请审核台，纵向查看完整问答与飞书原图并同步审核结果。',
+  },
+  {
     id: 'blindboxReview',
     inputName: 'blindboxReview',
     input: 'blindbox-review/index.html',

@@ -8,6 +8,9 @@
     },
     "api/edu/[action].js": {
       "maxDuration": 60
+    },
+    "api/artisan/[action].js": {
+      "maxDuration": 60
     }
   }
 }

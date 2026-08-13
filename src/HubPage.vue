@@ -83,6 +83,13 @@ const workbenches = [
   },
   {
     number: 'A4',
+    title: '鲲鹏匠人审核',
+    description: '纵向查看匠人申请问答、工作台与作品原图。',
+    href: '/artisan-screening/',
+    accent: 'green',
+  },
+  {
+    number: 'A5',
     title: '盲盒兑现审核',
     description: '逐条核对中奖用户的兑现和置换申请。',
     href: '/blindbox-review/',
