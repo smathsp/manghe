@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 
 const STORAGE_KEY = 'qixi-battle-stage-v2'
 
@@ -18,7 +18,7 @@ const contestants = [
   { id: 12, name: '🌈熱爱生活🌈', group: 2 },
   { id: 13, name: '啊彬', group: 2 },
   { id: 14, name: 'Holy', group: 2 },
-  { id: 15, name: '（　　　　　　　　）', group: 2 },
+  { id: 15, name: '（）', group: 2 },
   { id: 16, name: '雨沐云', group: 2 },
   { id: 17, name: '西奈灌饼', group: 2 },
   { id: 18, name: '哈', group: 2 },
@@ -32,10 +32,19 @@ const phase = ref('groups')
 const history = ref([])
 const showResetDialog = ref(false)
 const notice = ref('')
+const cursorAura = ref(null)
+const cursorVisible = ref(false)
+const hearts = ref([])
 let noticeTimer = 0
+let pointerFrame = 0
+let pointerX = 0
+let pointerY = 0
+let lastHeartAt = 0
+let nextHeartId = 1
+const heartTimers = new Set()
 const groups = [1, 2].map((number) => ({
   number,
-  title: number === 1 ? '银河组' : '鹊桥组',
+  label: `第${number === 1 ? '一' : '二'}组`,
   members: contestants.filter((person) => person.group === number),
 }))
 
@@ -48,6 +57,25 @@ const champion = computed(() => phase.value === 'final'
 
 function groupEliminatedCount(group) {
   return group.members.filter((person) => eliminatedIds.value.has(person.id)).length
+}
+
+const graphemeSegmenter = typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter('zh-CN', { granularity: 'grapheme' })
+  : null
+
+function nameSizeClass(name) {
+  const graphemes = graphemeSegmenter
+    ? [...graphemeSegmenter.segment(name)].map(({ segment }) => segment)
+    : Array.from(name)
+  const displayUnits = graphemes.reduce((total, segment) => {
+    if (/\p{Extended_Pictographic}/u.test(segment)) return total + 1.2
+    if (/^[\x00-\xff]+$/.test(segment)) return total + 0.58
+    return total + 1
+  }, 0)
+
+  if (displayUnits > 9) return 'name-compact'
+  if (displayUnits > 6.2) return 'name-medium'
+  return 'name-regular'
 }
 
 function snapshot() {
@@ -84,7 +112,7 @@ function toggleEliminated(person, group) {
     remember()
     next.add(person.id)
   } else {
-    flash(`${group.title}已经淘汰 2 人，可先点亮一人再修改。`)
+    flash(`${group.label}已经淘汰 2 人，可先点亮一人再修改。`)
     return
   }
   eliminatedIds.value = next
@@ -102,7 +130,12 @@ function enterFinal() {
   phase.value = 'final'
   winnerId.value = null
   persist()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  nextTick(() => {
+    document.querySelector('.qixi-final-grid')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+  })
 }
 
 function editGroups() {
@@ -159,25 +192,97 @@ function restore() {
 }
 
 restore()
+
+function addHeart(x, y) {
+  const id = nextHeartId++
+  const drift = Math.round((Math.random() - 0.5) * 120)
+  const duration = Math.round(950 + Math.random() * 650)
+  const symbols = ['♥', '❤', '♡']
+  hearts.value = [...hearts.value.slice(-27), {
+    id,
+    x,
+    y,
+    drift,
+    burstX: Math.round(drift * -.28),
+    duration,
+    size: Math.round(13 + Math.random() * 15),
+    spin: Math.round((Math.random() - 0.5) * 110),
+    symbol: symbols[id % symbols.length],
+  }]
+
+  const timer = window.setTimeout(() => {
+    hearts.value = hearts.value.filter((heart) => heart.id !== id)
+    heartTimers.delete(timer)
+  }, duration + 80)
+  heartTimers.add(timer)
+}
+
+function handlePointerMove(event) {
+  if (event.pointerType === 'touch') return
+  pointerX = event.clientX
+  pointerY = event.clientY
+  cursorVisible.value = true
+
+  if (!pointerFrame) {
+    pointerFrame = window.requestAnimationFrame(() => {
+      cursorAura.value?.style.setProperty('transform', `translate3d(${pointerX}px, ${pointerY}px, 0)`)
+      pointerFrame = 0
+    })
+  }
+
+  const card = event.target.closest?.('.qixi-person, .qixi-finalist')
+  if (card) {
+    const bounds = card.getBoundingClientRect()
+    card.style.setProperty('--mx', `${event.clientX - bounds.left}px`)
+    card.style.setProperty('--my', `${event.clientY - bounds.top}px`)
+  }
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const now = performance.now()
+  if (now - lastHeartAt < 58) return
+  lastHeartAt = now
+  addHeart(event.clientX, event.clientY)
+}
+
+function hideCursorEffects() {
+  cursorVisible.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('pointermove', handlePointerMove, { passive: true })
+  document.addEventListener('mouseleave', hideCursorEffects)
+  window.addEventListener('blur', hideCursorEffects)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointermove', handlePointerMove)
+  document.removeEventListener('mouseleave', hideCursorEffects)
+  window.removeEventListener('blur', hideCursorEffects)
+  if (pointerFrame) window.cancelAnimationFrame(pointerFrame)
+  heartTimers.forEach((timer) => window.clearTimeout(timer))
+})
 </script>
 
 <template>
   <main class="qixi-page">
     <div class="qixi-stars" aria-hidden="true"></div>
-    <header class="qixi-hero">
-      <a class="qixi-home" href="/">KP / QIXI 2026</a>
-      <div class="qixi-knot" aria-hidden="true"><span><b>七</b></span><i></i><span><b>夕</b></span></div>
-      <p class="qixi-eyebrow">THE NIGHT OF DESTINY · 七夕特别企划</p>
-      <h1>七夕<br><em>角逐寂寞</em></h1>
-      <p class="qixi-lead">二十颗星落入银河。转动命运之轮，留下今晚的十六位决赛者。</p>
-      <div class="qixi-scoreboard" aria-label="赛程统计">
-        <span><b>20</b><small>初始选手</small></span>
-        <i></i>
-        <span><b>{{ totalEliminated }}</b><small>分组淘汰</small></span>
-        <i></i>
-        <span><b>{{ finalists.length }}</b><small>{{ phase === 'groups' ? '当前晋级' : '决赛选手' }}</small></span>
-      </div>
-    </header>
+    <div ref="cursorAura" class="qixi-cursor-aura" :class="{ visible: cursorVisible }" aria-hidden="true"></div>
+    <div class="qixi-heart-rain" aria-hidden="true">
+      <span
+        v-for="heart in hearts"
+        :key="heart.id"
+        class="qixi-heart"
+        :style="{
+          left: `${heart.x}px`,
+          top: `${heart.y}px`,
+          fontSize: `${heart.size}px`,
+          '--drift': `${heart.drift}px`,
+          '--burst-x': `${heart.burstX}px`,
+          '--spin': `${heart.spin}deg`,
+          '--duration': `${heart.duration}ms`,
+        }"
+      >{{ heart.symbol }}</span>
+    </div>
 
     <nav class="qixi-toolbar" aria-label="赛程操作">
       <div class="qixi-steps">
@@ -207,10 +312,7 @@ restore()
       <div class="qixi-groups">
         <article v-for="group in groups" :key="group.number" class="qixi-group-card">
           <header>
-            <div>
-              <small>GROUP 0{{ group.number }}</small>
-              <h3>{{ group.title }}</h3>
-            </div>
+            <small class="qixi-group-label">GROUP 0{{ group.number }}</small>
             <strong :class="{ complete: groupEliminatedCount(group) === 2 }">
               {{ groupEliminatedCount(group) }} / 2 已淘汰
             </strong>
@@ -226,9 +328,9 @@ restore()
               :aria-pressed="eliminatedIds.has(person.id)"
               @click="toggleEliminated(person, group)"
             >
-              <span class="qixi-number">{{ String(index + 1).padStart(2, '0') }}</span>
-              <span class="qixi-name">{{ person.name }}</span>
-              <span class="qixi-mark">{{ eliminatedIds.has(person.id) ? '已淘汰' : '在场' }}</span>
+              <span class="qixi-number">{{ index + 1 }}</span>
+              <span class="qixi-name" :class="nameSizeClass(person.name)">{{ person.name }}</span>
+              <span v-if="eliminatedIds.has(person.id)" class="qixi-mark">已淘汰</span>
             </button>
           </div>
         </article>
@@ -246,13 +348,13 @@ restore()
       </div>
     </section>
 
-    <section v-else class="qixi-stage qixi-final-stage" aria-labelledby="final-stage-title">
+    <section v-else class="qixi-stage qixi-final-stage" :class="{ 'has-champion': champion }" aria-labelledby="final-stage-title">
       <header class="qixi-section-heading qixi-final-heading">
         <div>
-          <span>ROUND 02 · FINAL</span>
-          <h2 id="final-stage-title">十六强命运决赛</h2>
+          <span>ROUND 02 · THE FINAL BATTLE</span>
+          <h2 id="final-stage-title">十六强 · 终局之战</h2>
         </div>
-        <p>决赛编号已重新生成 · 实体转盘最终抽中一人，点击昵称确认冠军</p>
+        <p>实体转盘最终抽中一人 · 点击昵称加冕冠军</p>
       </header>
 
       <div v-if="champion" class="qixi-champion" role="status">
@@ -262,12 +364,21 @@ restore()
         <p>十六选一，一次定胜负。七夕命运之轮的最终胜者。</p>
       </div>
 
-      <div class="qixi-final-summary">
-        <div><span>16</span><small>决赛起始</small></div>
-        <i></i>
-        <div><span>1</span><small>最终名额</small></div>
-        <i></i>
-        <div><span>{{ champion ? 1 : 0 }}</span><small>冠军已定</small></div>
+      <div class="qixi-final-lockup" aria-label="十六选一">
+        <div class="qixi-final-count">
+          <strong>16</strong>
+          <span>FINALISTS</span>
+        </div>
+        <div class="qixi-final-strike">
+          <i></i>
+          <strong>一轮定胜负</strong>
+          <small>实体转盘 · 终局开启</small>
+          <i></i>
+        </div>
+        <div class="qixi-final-count winner-count">
+          <strong>1</strong>
+          <span>WINNER</span>
+        </div>
       </div>
 
       <div class="qixi-final-grid">
@@ -279,12 +390,13 @@ restore()
           :class="{
             champion: champion?.id === person.id,
           }"
+          :style="{ '--i': index }"
           :aria-pressed="champion?.id === person.id"
           @click="selectWinner(person)"
         >
-          <span class="qixi-final-number">{{ String(index + 1).padStart(2, '0') }}</span>
-          <strong>{{ person.name }}</strong>
-          <small>{{ champion?.id === person.id ? '今夜冠军' : '等待命运' }}</small>
+          <span class="qixi-final-number">{{ index + 1 }}</span>
+          <strong :class="nameSizeClass(person.name)">{{ person.name }}</strong>
+          <small v-if="champion?.id === person.id">今夜冠军</small>
         </button>
       </div>
 
@@ -309,9 +421,5 @@ restore()
       </div>
     </Transition>
 
-    <footer class="qixi-footer">
-      <span>鲲鹏张导 · 七夕特别企划</span>
-      <span>愿今夜，被命运选中的人都不再寂寞。</span>
-    </footer>
   </main>
 </template>
