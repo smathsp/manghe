@@ -16,6 +16,10 @@ const PAGE_LOADERS = Object.freeze({
   first50: () => loadLegacyPage(() => import('../First50Page.vue')),
   thanks: () => import('../ThanksPage.vue').then((module) => module.default),
   voidBox: () => import('../VoidBoxPage.vue').then((module) => module.default),
+  qixiBattle: () => Promise.all([
+    import('../qixi-battle.css'),
+    import('../QixiBattlePage.vue'),
+  ]).then(([, componentModule]) => componentModule.default),
   mailbox: () => import('../MailboxPage.vue').then((module) => module.default),
   screening: () => import('../ScreeningPage.vue').then((module) => module.default),
   screeningLightboard: () => import('../LightboardScreeningPage.vue').then((module) => module.default),

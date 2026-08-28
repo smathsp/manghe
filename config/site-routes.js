@@ -56,6 +56,14 @@ export const SITE_PAGES = Object.freeze([
     description: '虚空大帝盲盒 64 份订单登记名单，按订单时间排序。',
   },
   {
+    id: 'qixiBattle',
+    inputName: 'qixiBattle',
+    input: 'qixi-battle/index.html',
+    paths: ['/qixi-battle', '/qixi-battle/index.html'],
+    title: '七夕角逐寂寞｜二十人命运淘汰赛',
+    description: '七夕角逐寂寞现场抽签台：两组二十人角逐决赛席位，记录实体大转盘淘汰结果。',
+  },
+  {
     id: 'mailbox',
     inputName: 'mail',
     input: 'mail/index.html',

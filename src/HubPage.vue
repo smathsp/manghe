@@ -57,6 +57,14 @@ const publicProjects = [
     label: '订单名录',
     accent: 'slate',
   },
+  {
+    number: '08',
+    title: '七夕角逐寂寞',
+    description: '二十人分组抽签，记录淘汰结果并开启十六强命运决赛。',
+    href: '/qixi-battle/',
+    label: '七夕企划',
+    accent: 'rose',
+  },
 ]
 
 const workbenches = [
@@ -121,12 +129,12 @@ const workbenches = [
         <p class="hub-intro">活动、名单、内容与审核工具，集中在一个清晰的入口。</p>
         <div class="hub-hero-actions">
           <a class="hub-primary-action" href="#projects">浏览全部项目 <span>↓</span></a>
-          <span class="hub-count"><b>11</b> 个可用入口</span>
+          <span class="hub-count"><b>12</b> 个可用入口</span>
         </div>
       </div>
       <div class="hub-hero-index" aria-hidden="true">
         <span>INDEX</span>
-        <strong>11</strong>
+        <strong>12</strong>
         <small>PROJECTS<br>ONLINE</small>
       </div>
     </section>
